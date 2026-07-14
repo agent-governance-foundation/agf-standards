@@ -2,7 +2,7 @@
 
 **Version:** 0.1.0 (Draft)  
 **Status:** Working Draft  
-**Supersedes:** none  
+**Supersedes:** None  
 **Layer:** Kernel  
 
 ## 1. Introduction

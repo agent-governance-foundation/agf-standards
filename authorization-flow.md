@@ -38,6 +38,8 @@ The answer includes:
 - Risk score (0–100)
 - Audit artifact (signed, replayable)
 
+The flow below exercises all six AAP-Core kernel objects ([Spec 00](specs/00-aap-core.md)): the **Actor** registers an identity (Phase 2), receives **Authority** through delegation (Phase 3), attempts an **Action** (Phase 4), gets a **Decision** with a policy version (Phases 5–8), leaves a signed **Receipt** trail (Phase 9), and can lose authority through **Invalidation** (Phase 10). If you want the minimal normative model before the full walkthrough, read Spec 00 first.
+
 ## 2. Core Concepts
 
 | Concept | Definition | Where Defined |

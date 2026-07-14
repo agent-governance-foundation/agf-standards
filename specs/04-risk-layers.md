@@ -2,7 +2,7 @@
 
 **Version:** 0.1.0 (Draft)  
 **Status:** Working Draft  
-**Supersedes:** 0.1.2  
+**Supersedes:** None  
 **Layer:** Profile  
 
 ## 1. Introduction

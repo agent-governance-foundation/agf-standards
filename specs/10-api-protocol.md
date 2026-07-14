@@ -1,8 +1,8 @@
 # Specification 10: API Protocol
 
-**Version:** 0.1.0 (Draft)  
+**Version:** 0.2.0 (Draft)  
 **Status:** Working Draft  
-**Supersedes:** None  
+**Supersedes:** 0.1.0  
 **Layer:** Core format  
 
 ## 1. Introduction
@@ -266,6 +266,8 @@ Response:
 }
 ```
 
+`decision` is one of `ALLOW`, `ALLOW_WITH_CAUTION`, `DENY`, `REVIEW_REQUIRED`. `REVIEW_REQUIRED` means the action must not proceed until a human judgment is rendered (Spec 15); the kernel mapping for all four values is defined in Spec 00 §4.2.
+
 ### 5.6 Audit Service API
 
 **`GET /v1/artifacts/{artifact_id}`** — Retrieve decision artifact. Response: Decision artifact (see Spec 07).
@@ -275,7 +277,7 @@ Response:
 Query params:
 - `start_time` (Unix timestamp)
 - `end_time` (Unix timestamp)
-- `decision` (`ALLOW`, `DENY`, `ALLOW_WITH_CAUTION`)
+- `decision` (`ALLOW`, `ALLOW_WITH_CAUTION`, `DENY`, `REVIEW_REQUIRED`)
 - `subject` (DID)
 - `verifier` (DID)
 - `policy_version` (string)
@@ -369,3 +371,4 @@ Response:
 | Version | Date | Changes |
 |---------|------|---------|
 | 0.1.0 | 2026-07-12 | Initial public working draft |
+| 0.2.0 | 2026-07-14 | Documented the complete four-value `decision` enum (added missing `REVIEW_REQUIRED`) in §5.5 and the artifact-search filter, with kernel mapping reference (Spec 00 §4.2) |
