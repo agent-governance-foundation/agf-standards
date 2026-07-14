@@ -80,6 +80,9 @@ The protocol adapters (Specs 21–23) mediate execution and are the natural sign
 
 ## Unresolved questions
 
-- Spec 06 §6.5 and Spec 11 POLICY-09/10 disagree on policy-version-not-found behavior: Spec 06 requires a uniform `NOT_APPLICABLE` outcome with no fallback (which the reference implementation follows), while POLICY-09 describes an issuer-trust-gated fallback with `ALLOW_WITH_CAUTION`. Kernel vector KERNEL-NEG-03 follows Spec 06; POLICY-09/10 need reconciliation (likely removal of the fallback path) in a follow-up change to Spec 11.
 - Whether Specs 24–27 (cross-organization trust) should be grouped as a named "Federation" profile in the index.
+
+## Resolved during draft
+
+- **Spec 06 §6.5 vs Spec 11 POLICY-09/10** (2026-07-14): the two specs disagreed on policy-version-not-found behavior — Spec 06 required a uniform `NOT_APPLICABLE` with no fallback (which the reference implementation follows), while POLICY-09 described an issuer-trust-gated fallback. Resolved in Spec 06's favor: the trusted-issuer fallback is removed; a missing requested version MUST surface in the decide response (`error_code: POLICY_VERSION_NOT_FOUND`, `policy_version_requested` / `policy_version_applied: null`) and the decision is capped at `ALLOW_WITH_CAUTION`, mirroring the stale-revocation-list precedent (Spec 05 §5.4). See Spec 06 0.2.0, Spec 10 0.3.0, Spec 11 0.3.0, and the concretized KERNEL-NEG-03 in Spec 00 0.1.1.
 - Whether Receipt `outcome` observation and drift-linked Invalidation move from SHOULD to MUST when Spec 00 advances past Working Draft.

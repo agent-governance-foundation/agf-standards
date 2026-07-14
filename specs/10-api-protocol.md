@@ -1,8 +1,8 @@
 # Specification 10: API Protocol
 
-**Version:** 0.2.0 (Draft)  
+**Version:** 0.3.0 (Draft)  
 **Status:** Working Draft  
-**Supersedes:** 0.1.0  
+**Supersedes:** 0.2.0  
 **Layer:** Core format  
 
 ## 1. Introduction
@@ -268,6 +268,16 @@ Response:
 
 `decision` is one of `ALLOW`, `ALLOW_WITH_CAUTION`, `DENY`, `REVIEW_REQUIRED`. `REVIEW_REQUIRED` means the action must not proceed until a human judgment is rendered (Spec 15); the kernel mapping for all four values is defined in Spec 00 §4.2.
 
+When the request (or a token's `policy_version` claim) names a policy version the PDP cannot load, the response additionally carries (Spec 06 §6.5):
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `policy_version_requested` | string | The version that was asked for |
+| `policy_version_applied` | string or null | The version actually evaluated — `null` when the requested version was not found |
+| `error_code` | string | `POLICY_VERSION_NOT_FOUND` |
+
+In this state the decision is capped at `ALLOW_WITH_CAUTION`. The legacy `policy_version` field is unchanged for compatibility; new consumers SHOULD read `policy_version_applied`.
+
 ### 5.6 Audit Service API
 
 **`GET /v1/artifacts/{artifact_id}`** — Retrieve decision artifact. Response: Decision artifact (see Spec 07).
@@ -372,3 +382,4 @@ Response:
 |---------|------|---------|
 | 0.1.0 | 2026-07-12 | Initial public working draft |
 | 0.2.0 | 2026-07-14 | Documented the complete four-value `decision` enum (added missing `REVIEW_REQUIRED`) in §5.5 and the artifact-search filter, with kernel mapping reference (Spec 00 §4.2) |
+| 0.3.0 | 2026-07-14 | §5.5: added `policy_version_requested` / `policy_version_applied` / `error_code: POLICY_VERSION_NOT_FOUND` response fields for the missing-policy-version state (Spec 06 §6.5, KERNEL-NEG-03) |

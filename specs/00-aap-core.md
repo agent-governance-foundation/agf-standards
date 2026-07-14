@@ -1,8 +1,8 @@
 # Specification 00: AAP-Core — Normative Kernel
 
-**Version:** 0.1.0 (Draft)  
+**Version:** 0.1.1 (Draft)  
 **Status:** Working Draft  
-**Supersedes:** None  
+**Supersedes:** 0.1.0  
 **Layer:** Kernel  
 
 ## 1. Introduction
@@ -196,7 +196,7 @@ Positive-path conformance is covered by the categories in Spec 11. The kernel ad
 |----|--------|------------------|
 | KERNEL-NEG-01 | Expired delegation: Authority presented after `expires_at` | `DENY`; expiry derivable per §3.6; error `EXPIRED` |
 | KERNEL-NEG-02 | Replayed action: a previously evaluated request (same Authority, Action, and request correlation id) re-presented, or a Decision/Receipt artifact presented as authorization | Fresh evaluation or rejection — a stored `ALLOW` MUST NOT be honored as bearer authority (§7.1); duplicate `jti` issuance MUST be rejected (Spec 01 §5.3) |
-| KERNEL-NEG-03 | Policy-version mismatch: requested `policy_ref` unavailable to the decider | MUST NOT evaluate under a different policy version; the mismatch MUST surface in the Decision per Spec 06 §6.5. Reconciliation of Spec 11 POLICY-09/10 with this rule is tracked in RFC 0001 |
+| KERNEL-NEG-03 | Policy-version mismatch: requested `policy_ref` unavailable to the decider | MUST NOT evaluate under a different policy version; the mismatch MUST surface in the Decision (`POLICY_VERSION_NOT_FOUND` with a requested/applied version echo) and the outcome carries the `caution` qualifier — Spec 06 §6.5, Spec 11 POLICY-09/10 |
 | KERNEL-NEG-04 | Revoked parent grant: Invalidation (`cause: revoked`) exists for an ancestor of the presented Authority | `DENY` for the entire branch (Spec 05 §3); error `REVOKED` |
 | KERNEL-NEG-05 | Receipt for a denied action: a Receipt with `outcome: executed` whose `decision_ref` is a `DENY` or unresolved `REVIEW_REQUIRED` | The Receipt MUST verify as signature-valid but MUST be reported as an enforcement violation by audit verification (Spec 07 §6.3) |
 
@@ -219,3 +219,4 @@ Receipt `outcome: unknown` is honest but weak: a system in which most Receipts a
 | Version | Date | Changes |
 |---------|------|---------|
 | 0.1.0 | 2026-07-14 | Initial kernel specification, extracted as the normative core of Specs 01–27 (RFC 0001) |
+| 0.1.1 | 2026-07-14 | KERNEL-NEG-03 expected outcome concretized after the Spec 06 §6.5 / Spec 11 POLICY-09/10 reconciliation (RFC 0001): explicit `POLICY_VERSION_NOT_FOUND` surfacing + `caution`-qualified outcome |

@@ -1,8 +1,8 @@
 # Specification 11: Conformance Test Suite
 
-**Version:** 0.2.0 (Draft)  
+**Version:** 0.3.0 (Draft)  
 **Status:** Working Draft  
-**Supersedes:** 0.1.0  
+**Supersedes:** 0.2.0  
 **Layer:** Operational  
 
 ## 1. Introduction
@@ -109,8 +109,8 @@ pytest tests/test_risk.py -k RISK-05 --weighting=conservative
 | POLICY-06 | Missing policy | fail with `NOT_FOUND` |
 | POLICY-07 | Invalid policy syntax | fail with `INVALID_POLICY` |
 | POLICY-08 | Token with `policy_version` claim | exact version used |
-| POLICY-09 | `policy_version` not found, trusted issuer | fallback with `ALLOW_WITH_CAUTION` |
-| POLICY-10 | `policy_version` not found, untrusted issuer | fail with `POLICY_VERSION_NOT_FOUND` |
+| POLICY-09 | `policy_version` not found | no fallback to any other version; response carries `error_code: POLICY_VERSION_NOT_FOUND` with `policy_version_requested` / `policy_version_applied: null`; decision capped at `ALLOW_WITH_CAUTION` (Spec 06 §6.5) |
+| POLICY-10 | `policy_version` not found: artifact echo | artifact policy block records `requested_version` and `used_version: null`, never a fabricated version (Spec 06 §6.5) |
 
 ### 3.7 Audit Tests (Level 2)
 
@@ -191,7 +191,7 @@ AAP-Core (Spec 00 §6) REQUIRES five negative vectors at every conformance level
 |---------|-------------|-------------|
 | KERNEL-NEG-01 | Expired delegation presented | `DENY` with `EXPIRED` |
 | KERNEL-NEG-02 | Replayed action / artifact presented as authorization | fresh evaluation or rejection; stored `ALLOW` never honored as bearer authority |
-| KERNEL-NEG-03 | Requested policy version unavailable | mismatch surfaces in the Decision per Spec 06 §6.5 (reconciliation with POLICY-09/10 tracked in RFC 0001) |
+| KERNEL-NEG-03 | Requested policy version unavailable | surfaced per Spec 06 §6.5: `POLICY_VERSION_NOT_FOUND` + version echo, decision capped at `ALLOW_WITH_CAUTION` (POLICY-09/10) |
 | KERNEL-NEG-04 | Revoked parent grant in presented chain | `DENY` with `REVOKED` for the whole branch |
 | KERNEL-NEG-05 | Receipt claims execution of a denied action | signature-valid but reported as enforcement violation |
 
@@ -254,3 +254,4 @@ Overall: 75/77 passed (97.4%)
 |---------|------|---------|
 | 0.1.0 | 2026-07-12 | Initial public working draft |
 | 0.2.0 | 2026-07-14 | Added §3.11 kernel negative vectors (KERNEL-NEG-01…05) required by AAP-Core (Spec 00, RFC 0001) |
+| 0.3.0 | 2026-07-14 | POLICY-09/10 reconciled with Spec 06 §6.5 (RFC 0001): trusted-issuer fallback removed; POLICY-09 = surfaced mismatch + `ALLOW_WITH_CAUTION` cap, POLICY-10 = artifact version echo. KERNEL-NEG-03 row updated to the resolved behavior |

@@ -1,8 +1,8 @@
 # Specification 06: Policy Model and Versioning
 
-**Version:** 0.1.0 (Draft)  
+**Version:** 0.2.0 (Draft)  
 **Status:** Working Draft  
-**Supersedes:** None  
+**Supersedes:** 0.1.0  
 **Layer:** Core format  
 
 ## 1. Introduction
@@ -274,6 +274,8 @@ When a delegation token includes a `policy_version` claim (see Spec 01 §2.4):
 1. The PDP MUST evaluate that exact policy version
 2. If the policy version is not found, the PDP MUST NOT fall back to any other version — it MUST return `NOT_APPLICABLE` for the policy leg of the decision. The request is then decided on trust + risk alone (see Spec 04 / `authorization-flow.md` §10.1); it is never silently evaluated against a different org's or version's policy. This matters in multi-tenant deployments where a policy directory is shared across orgs: falling back to "whatever policy sorts last" would risk evaluating one org's request against a different org's Rego.
 3. The decision artifact MUST record the requested version and that no policy was applied (`used_version: null`, or equivalent), never a fabricated "used" version
+4. The decide response MUST surface the mismatch explicitly: `error_code: "POLICY_VERSION_NOT_FOUND"` together with `policy_version_requested` (the version asked for) and `policy_version_applied: null` (see Spec 10 §5.5). A `NOT_APPLICABLE` recorded only inside the artifact's policy block is not sufficient surfacing
+5. The final decision MUST be capped at `ALLOW_WITH_CAUTION`: a trust+risk-only outcome under a missing requested policy version is a degraded-assurance state, following the same principle as the stale-revocation-list cap (Spec 05 §5.4). Kernel mapping: `ALLOW` + `caution` qualifier (Spec 00 §4.2)
 
 **Audit artifact entry when no matching version is found:**
 
@@ -406,3 +408,4 @@ Implementations MUST detect and log policy conflicts. When a conflict is detecte
 | Version | Date | Changes |
 |---------|------|---------|
 | 0.1.0 | 2026-07-12 | Initial public working draft |
+| 0.2.0 | 2026-07-14 | §6.5: missing requested policy version must surface in the decide response (`POLICY_VERSION_NOT_FOUND`, `policy_version_requested`/`policy_version_applied`) and the decision is capped at `ALLOW_WITH_CAUTION` (KERNEL-NEG-03, RFC 0001) |
