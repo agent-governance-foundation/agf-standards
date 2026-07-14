@@ -1,8 +1,9 @@
 # Specification 11: Conformance Test Suite
 
-**Version:** 0.1.0 (Draft)  
+**Version:** 0.2.0 (Draft)  
 **Status:** Working Draft  
-**Supersedes:** 0.1.1
+**Supersedes:** 0.1.0  
+**Layer:** Operational  
 
 ## 1. Introduction
 
@@ -182,6 +183,18 @@ If an implementation cannot meet these targets, it MUST document its measured pe
 | SEC-05 | Privilege escalation | prevented |
 | SEC-06 | Denial of service | rate limited |
 
+### 3.11 Kernel Negative Vectors (Level 1)
+
+AAP-Core (Spec 00 §6) REQUIRES five negative vectors at every conformance level. They are normatively defined in Spec 00 and listed here for suite completeness; vector fixtures ship with the kernel schemas.
+
+| Test ID | Description | Requirement |
+|---------|-------------|-------------|
+| KERNEL-NEG-01 | Expired delegation presented | `DENY` with `EXPIRED` |
+| KERNEL-NEG-02 | Replayed action / artifact presented as authorization | fresh evaluation or rejection; stored `ALLOW` never honored as bearer authority |
+| KERNEL-NEG-03 | Requested policy version unavailable | mismatch surfaces in the Decision per Spec 06 §6.5 (reconciliation with POLICY-09/10 tracked in RFC 0001) |
+| KERNEL-NEG-04 | Revoked parent grant in presented chain | `DENY` with `REVOKED` for the whole branch |
+| KERNEL-NEG-05 | Receipt claims execution of a denied action | signature-valid but reported as enforcement violation |
+
 ## 4. Test Environment
 
 ### 4.1 Setup
@@ -240,3 +253,4 @@ Overall: 75/77 passed (97.4%)
 | Version | Date | Changes |
 |---------|------|---------|
 | 0.1.0 | 2026-07-12 | Initial public working draft |
+| 0.2.0 | 2026-07-14 | Added §3.11 kernel negative vectors (KERNEL-NEG-01…05) required by AAP-Core (Spec 00, RFC 0001) |

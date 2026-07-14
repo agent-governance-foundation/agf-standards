@@ -1,0 +1,17 @@
+{
+  "id": "dec_1735603400_d4e5f6",
+  "status": "DENY",
+  "qualifiers": [],
+  "action": {
+    "type": "write:document",
+    "target": "documents/acme/payroll-export.csv"
+  },
+  "authority_refs": [],
+  "policy": {
+    "version": "acme/policies/document/access@1.2.0",
+    "hash": "def456"
+  },
+  "decider": "did:agf:acme:pdp-01",
+  "decided_at": 1735603400,
+  "reasons": ["no_authority_presented"]
+}

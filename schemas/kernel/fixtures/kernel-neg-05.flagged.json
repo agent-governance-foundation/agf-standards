@@ -1,0 +1,9 @@
+{
+  "id": "rcpt_1735603410_e5f6a7",
+  "decision_ref": "dec_1735603400_d4e5f6",
+  "attempted": true,
+  "outcome": "executed",
+  "completed_at": 1735603410,
+  "signer": "did:agf:acme:gateway-01",
+  "signature": "base64EncodedSignatureExample=="
+}

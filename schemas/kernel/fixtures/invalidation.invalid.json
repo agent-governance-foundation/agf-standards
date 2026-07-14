@@ -1,0 +1,7 @@
+{
+  "subject": "del_abc123",
+  "subject_type": "authority",
+  "cause": "revoked",
+  "occurred_at": 1735604000,
+  "detected_at": 1735604001
+}

@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-governance-foundation.github.io/agf-standards/schemas/kernel/actor.schema.json",
+  "title": "Actor",
+  "description": "The human, service, or agent instance that acts.",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Globally unique, resolvable identifier."
+    },
+    "actor_type": {
+      "type": "string",
+      "enum": ["human", "service", "agent"]
+    },
+    "keys": {
+      "type": "array",
+      "description": "One or more verification methods. REQUIRED for any actor that signs kernel objects (issues Authority, signs Decisions or Receipts); OPTIONAL for actors that act only through an authenticated intermediary.",
+      "items": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    }
+  },
+  "required": ["id", "actor_type"],
+  "if": {
+    "required": ["keys"]
+  },
+  "then": {
+    "properties": {
+      "keys": {
+        "minItems": 1
+      }
+    }
+  },
+  "additionalProperties": true
+}

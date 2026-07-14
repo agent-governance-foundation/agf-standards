@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-governance-foundation.github.io/agf-standards/schemas/kernel/invalidation.schema.json",
+  "title": "Invalidation",
+  "description": "An auditable record that something previously valid no longer is.",
+  "type": "object",
+  "properties": {
+    "subject": {
+      "type": "string",
+      "description": "id of the invalidated thing."
+    },
+    "subject_type": {
+      "type": "string",
+      "enum": ["authority", "actor_key", "policy_version"]
+    },
+    "cause": {
+      "type": "string",
+      "enum": ["revoked", "expired", "superseded", "policy_drift", "policy_version_mismatch"]
+    },
+    "occurred_at": {
+      "type": "integer",
+      "description": "When validity ended (Unix seconds)."
+    },
+    "detected_at": {
+      "type": "integer",
+      "description": "When the implementation recorded it (Unix seconds)."
+    },
+    "actor": {
+      "type": "string",
+      "description": "Actor id that caused the invalidation. REQUIRED when cause is revoked or superseded."
+    },
+    "superseded_by": {
+      "type": "string",
+      "description": "id of the replacing object, when cause is superseded."
+    },
+    "evidence": {
+      "type": "object",
+      "description": "Cause-specific supporting data.",
+      "additionalProperties": true
+    }
+  },
+  "required": ["subject", "subject_type", "cause", "occurred_at", "detected_at"],
+  "if": {
+    "properties": {
+      "cause": {
+        "enum": ["revoked", "superseded"]
+      }
+    },
+    "required": ["cause"]
+  },
+  "then": {
+    "required": ["actor"]
+  },
+  "additionalProperties": true
+}

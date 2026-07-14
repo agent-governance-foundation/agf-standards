@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-governance-foundation.github.io/agf-standards/schemas/kernel/action.schema.json",
+  "title": "Action",
+  "description": "The exact operation attempted, and its target.",
+  "type": "object",
+  "properties": {
+    "type": {
+      "type": "string",
+      "description": "The operation, in verb-object form."
+    },
+    "target": {
+      "type": "string",
+      "description": "The specific resource acted on."
+    },
+    "context": {
+      "type": "object",
+      "description": "Request circumstances: timestamp, origin, request correlation id.",
+      "properties": {
+        "timestamp": {
+          "type": "integer"
+        },
+        "origin": {
+          "type": "string"
+        },
+        "request_id": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "required": ["type", "target"],
+  "additionalProperties": true
+}

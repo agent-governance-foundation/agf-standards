@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-governance-foundation.github.io/agf-standards/schemas/kernel/authority.schema.json",
+  "title": "Authority",
+  "description": "The scoped, expiring delegation under which an Actor acts.",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Unique identifier of this grant."
+    },
+    "grantor": {
+      "type": "string",
+      "description": "Actor id of the issuer."
+    },
+    "grantee": {
+      "type": "string",
+      "description": "Actor id of the recipient."
+    },
+    "scope": {
+      "type": "array",
+      "description": "The permissions granted, as a machine-comparable set.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "issued_at": {
+      "type": "integer",
+      "description": "When the grant was made (Unix seconds)."
+    },
+    "expires_at": {
+      "type": "integer",
+      "description": "When the grant ceases to be valid (Unix seconds). Non-expiring Authority MUST NOT be issued."
+    },
+    "parent": {
+      "type": "string",
+      "description": "id of the Authority this one was derived from (chain link)."
+    },
+    "constraints": {
+      "type": "object",
+      "description": "Additional validity conditions (time, location, etc.).",
+      "additionalProperties": true
+    },
+    "policy_ref": {
+      "type": "string",
+      "description": "Policy version to evaluate this Authority under."
+    }
+  },
+  "required": ["id", "grantor", "grantee", "scope", "issued_at", "expires_at"],
+  "additionalProperties": true
+}

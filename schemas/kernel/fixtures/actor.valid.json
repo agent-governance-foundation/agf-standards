@@ -1,0 +1,11 @@
+{
+  "id": "did:agf:acme:agent:builder",
+  "actor_type": "agent",
+  "keys": [
+    {
+      "id": "did:agf:acme:agent:builder#key-1",
+      "type": "Ed25519VerificationKey2020",
+      "public_key_multibase": "z6MkExampleKeyMaterial"
+    }
+  ]
+}

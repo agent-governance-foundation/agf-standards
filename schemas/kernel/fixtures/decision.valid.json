@@ -1,0 +1,17 @@
+{
+  "id": "dec_1735603300_a1b2c3",
+  "status": "ALLOW",
+  "qualifiers": [],
+  "action": {
+    "type": "read:calendar",
+    "target": "calendars/alice@acme.com"
+  },
+  "authority_refs": ["del_abc123"],
+  "policy": {
+    "version": "acme/policies/calendar/access@1.2.0",
+    "hash": "abc123"
+  },
+  "decider": "did:agf:acme:pdp-01",
+  "decided_at": 1735603300,
+  "reasons": ["valid_delegation_chain", "risk_below_threshold"]
+}

@@ -1,0 +1,11 @@
+{
+  "subject": "del_abc123",
+  "subject_type": "authority",
+  "cause": "revoked",
+  "occurred_at": 1735604000,
+  "detected_at": 1735604001,
+  "actor": "did:agf:acme:alice",
+  "evidence": {
+    "reason": "grantor_initiated_revocation"
+  }
+}

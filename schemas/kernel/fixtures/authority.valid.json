@@ -1,0 +1,12 @@
+{
+  "id": "del_abc123",
+  "grantor": "did:agf:acme:alice",
+  "grantee": "did:agf:acme:agent:builder",
+  "scope": ["read:calendar", "write:draft"],
+  "issued_at": 1735603200,
+  "expires_at": 1735689600,
+  "constraints": {
+    "time_of_day": ["09:00-17:00"]
+  },
+  "policy_ref": "acme/policies/calendar/access@1.2.0"
+}

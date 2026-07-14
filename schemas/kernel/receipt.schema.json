@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-governance-foundation.github.io/agf-standards/schemas/kernel/receipt.schema.json",
+  "title": "Receipt",
+  "description": "The signed record correlating a Decision to what actually happened.",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Unique identifier."
+    },
+    "decision_ref": {
+      "type": "string",
+      "description": "id of exactly one Decision."
+    },
+    "attempted": {
+      "type": "boolean",
+      "description": "Whether execution was attempted after the Decision."
+    },
+    "outcome": {
+      "type": "string",
+      "enum": ["executed", "not_executed", "unknown"]
+    },
+    "completed_at": {
+      "type": "integer",
+      "description": "When the outcome was recorded (Unix seconds)."
+    },
+    "signer": {
+      "type": "string",
+      "description": "Actor id of the enforcement or observation point."
+    },
+    "signature": {
+      "type": "string",
+      "description": "Signature over the Receipt content."
+    }
+  },
+  "required": [
+    "id",
+    "decision_ref",
+    "attempted",
+    "outcome",
+    "completed_at",
+    "signer",
+    "signature"
+  ],
+  "additionalProperties": true
+}

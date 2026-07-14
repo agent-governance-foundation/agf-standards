@@ -1,0 +1,9 @@
+{
+  "type": "read:calendar",
+  "target": "calendars/alice@acme.com",
+  "context": {
+    "timestamp": 1735603300,
+    "origin": "10.0.1.45",
+    "request_id": "req_xyz"
+  }
+}

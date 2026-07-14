@@ -1,8 +1,9 @@
 # Specification 05: Revocation and Branch Cut Model
 
-**Version:** 0.1.0 (Draft)  
+**Version:** 0.2.0 (Draft)  
 **Status:** Working Draft  
-**Supersedes:** 0.1.3
+**Supersedes:** 0.1.0  
+**Layer:** Core format  
 
 ## 1. Introduction
 
@@ -110,6 +111,29 @@ def is_authorized(delegation_id, revocation_set):
 | `revoked_at` | number | Yes | When revocation occurred |
 | `reason` | string | Yes | `compromised`, `superseded`, `mission_complete`, `policy_change` |
 | `revoked_by` | string | Yes | DID of revoking entity |
+
+#### 4.3.1 Invalidation Mapping (AAP-Core)
+
+The revocation entry in this specification is the AGF serialization of the
+kernel's Invalidation object (Spec 00 §3.6). The `reason` field maps to the
+kernel's `cause` enum as follows:
+
+| Spec 05 `reason` | Kernel `cause` |
+|---|---|
+| `compromised` | `revoked` |
+| `superseded` | `superseded` |
+| `mission_complete` | `revoked` |
+| `policy_change` | `revoked` |
+
+The kernel `cause` describes the mechanism by which validity ended; the motive
+is preserved in this specification's `reason` field. In particular,
+`policy_change` maps to `revoked` — not `policy_drift` — because it is an
+explicit revocation act by an authority; the kernel reserves `policy_drift` for
+invalidation produced by behavioral drift findings (Spec 17). See RFC 0001.
+
+This mapping is normative for AGF implementations. Other implementations may
+use different serializations as long as they expose the kernel's Invalidation
+semantics.
 
 ### 4.4 List Size Limits
 
@@ -328,3 +352,4 @@ propagation_monitoring:
 | Version | Date | Changes |
 |---------|------|---------|
 | 0.1.0 | 2026-07-12 | Initial public working draft |
+| 0.2.0 | 2026-07-14 | Added §4.3.1 normative Invalidation mapping to the AAP-Core kernel `cause` enum (Spec 00, RFC 0001) |

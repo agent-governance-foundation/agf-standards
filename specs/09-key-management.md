@@ -2,7 +2,8 @@
 
 **Version:** 0.1.0 (Draft)  
 **Status:** Working Draft  
-**Supersedes:** None
+**Supersedes:** None  
+**Layer:** Core format  
 
 ## 1. Introduction
 

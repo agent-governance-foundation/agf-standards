@@ -2,7 +2,33 @@
 
 Machine-readable definitions of the wire formats specified in [specs/](../specs/). Prose specs are for humans; these are for validators, code generators, and CI.
 
+## Kernel schemas (available)
+
+The six normative kernel objects from Spec 00 — AAP-Core — are specified as
+JSON Schema (draft 2020-12) under [`kernel/`](kernel/):
+
+| Schema | Source spec |
+|---|---|
+| `kernel/actor.schema.json` | Spec 00 — AAP-Core |
+| `kernel/authority.schema.json` | Spec 00 — AAP-Core |
+| `kernel/action.schema.json` | Spec 00 — AAP-Core |
+| `kernel/decision.schema.json` | Spec 00 — AAP-Core |
+| `kernel/receipt.schema.json` | Spec 00 — AAP-Core |
+| `kernel/invalidation.schema.json` | Spec 00 — AAP-Core |
+
+These model the *abstract kernel* fields from Spec 00 §3 — the minimum every
+serialization must expose — not any one wire format. `kernel/fixtures/`
+carries paired valid/invalid example documents per object plus a
+cross-object semantic vector (KERNEL-NEG-05); see
+[`kernel/fixtures/README.md`](kernel/fixtures/README.md) for the mapping to
+Spec 00 §6's conformance vectors. `kernel/check.py` validates every fixture
+against its schema (falls back to a JSON well-formedness check if
+`jsonschema` isn't installed).
+
 ## Planned artifacts
+
+The AGF wire formats — the reference serialization of the kernel objects —
+are tracked separately:
 
 | Artifact | Source spec | Status |
 |---|---|---|

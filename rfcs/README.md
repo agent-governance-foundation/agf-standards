@@ -18,4 +18,4 @@ An accepted RFC is a decision, not a spec change by itself — the spec edits la
 
 | RFC | Title | Status |
 |---|---|---|
-| — | *none yet* | — |
+| [0001](0001-aap-core-kernel.md) | AAP-Core — a normative kernel for the Agent Authorization Protocol | Draft |

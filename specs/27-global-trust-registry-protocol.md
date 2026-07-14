@@ -2,7 +2,8 @@
 
 **Version:** 0.1.0 (Draft)
 **Status:** Working Draft  
-**Supersedes:** Spec 03 §6 (Global Zone Protocol) for this specific topic — Spec 03 remains the normative source for the overall three-zone model itself
+**Supersedes:** Spec 03 §6 (Global Zone Protocol) for this specific topic — Spec 03 remains the normative source for the overall three-zone model itself  
+**Layer:** Profile  
 
 ## 1. Introduction
 

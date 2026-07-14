@@ -29,14 +29,14 @@ Agent protocols standardize **how agents talk** to tools and to each other. AGF 
 
 - **[Vision & Mission](vision-and-mission.md)** — why AGF exists and the model behind it. Read this first.
 - **[Complete Authorization Flow](authorization-flow.md)** — end-to-end walkthrough: how an agent gets authority, makes a request, and produces an auditable decision.
-- **[Specifications](specs/)** — the standards themselves: 27 specs covering delegation tokens, chains, trust zones, risk, revocation, policy, audit, identity, keys, conformance, emergency procedures, privacy, deployment governance, human oversight, multi-agent coordination, behavioral monitoring, protocol adapters, and cross-domain trust.
+- **[Specifications](specs/)** — the standards themselves: a normative kernel (Spec 00) plus 27 specifications covering delegation tokens, chains, trust zones, risk, revocation, policy, audit, identity, keys, conformance, emergency procedures, privacy, deployment governance, human oversight, multi-agent coordination, behavioral monitoring, protocol adapters, and cross-domain trust.
 - **[Integration Guide](adoption/integration-guide.md)** — connecting AGF to an existing IAM (Okta, Azure AD, LDAP).
 
 ## What's in this repository
 
 | Directory | Contents |
 |---|---|
-| [specs/](specs/) | The AGF specifications (numbered 01–27) |
+| [specs/](specs/) | The AGF specifications (kernel Spec 00 plus 01–27) |
 | [schemas/](schemas/) | Machine-readable schemas (JSON Schema, OpenAPI) extracted from the specs |
 | [conformance/](conformance/) | Test vectors and the conformance suite for independent implementations |
 | [rfcs/](rfcs/) | Proposals for substantive changes to the specifications |

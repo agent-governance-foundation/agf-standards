@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-governance-foundation.github.io/agf-standards/schemas/kernel/decision.schema.json",
+  "title": "Decision",
+  "description": "The authorization verdict for one Action under one or more Authorities, evaluated against a specific policy version.",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Unique identifier."
+    },
+    "status": {
+      "type": "string",
+      "description": "Exactly one of ALLOW, DENY, REVIEW_REQUIRED.",
+      "enum": ["ALLOW", "DENY", "REVIEW_REQUIRED"]
+    },
+    "qualifiers": {
+      "type": "array",
+      "description": "Advisory markers refining status without changing it. May be empty.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "action": {
+      "description": "The Action decided on (embedded or by reference).",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": { "type": "string" },
+            "target": { "type": "string" },
+            "context": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "required": ["type", "target"],
+          "additionalProperties": true
+        },
+        {
+          "type": "string"
+        }
+      ]
+    },
+    "authority_refs": {
+      "type": "array",
+      "description": "ids of every Authority evaluated. Empty only for a DENY issued because no Authority was presented.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "policy": {
+      "type": "object",
+      "description": "The policy version and content hash the decision was evaluated under.",
+      "properties": {
+        "version": {
+          "type": "string"
+        },
+        "hash": {
+          "type": "string"
+        }
+      },
+      "required": ["version"],
+      "additionalProperties": true
+    },
+    "decider": {
+      "type": "string",
+      "description": "Actor id of the decision point."
+    },
+    "decided_at": {
+      "type": "integer",
+      "description": "Decision time (Unix seconds)."
+    },
+    "reasons": {
+      "type": "array",
+      "description": "Machine-readable reasoning.",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "id",
+    "status",
+    "qualifiers",
+    "action",
+    "authority_refs",
+    "policy",
+    "decider",
+    "decided_at"
+  ],
+  "additionalProperties": true
+}

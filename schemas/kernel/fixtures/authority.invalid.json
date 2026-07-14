@@ -1,0 +1,7 @@
+{
+  "id": "del_abc123",
+  "grantor": "did:agf:acme:alice",
+  "grantee": "did:agf:acme:agent:builder",
+  "scope": ["read:calendar", "write:draft"],
+  "issued_at": 1735603200
+}
