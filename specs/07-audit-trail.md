@@ -1,8 +1,8 @@
 # Specification 07: Audit Trail and Decision Provenance
 
-**Version:** 0.1.0 (Draft)  
+**Version:** 0.1.1 (Draft)  
 **Status:** Working Draft  
-**Supersedes:** None  
+**Supersedes:** 0.1.0  
 **Layer:** Core format  
 
 ## 1. Introduction
@@ -90,7 +90,7 @@ Auditors should not need access to the original system to verify a decision. The
 | `agent_id` | Yes | Acting principal (chain leaf subject); `null` when unextractable. Part of the signed evidence payload, so the serialized document must carry it |
 | `request` | Yes | Complete request |
 | `response` | Yes | Complete response |
-| `policy` | Yes | Policy version, decision, and content hash (`sha256`) |
+| `policy` | Yes | Policy version, decision, and content hash (`sha256`). When a requested policy version was not found, additionally carries `requested_version` and `used_version: null` (Spec 06 §6.5) |
 | `revocation_state` | Yes | The revocation check the decision actually ran: `method` (`live_db` for a decide-time database check, `static_list` for a versioned list), `checked_at`, `checked_jtis`, and `result` (`passed` or `revoked:<jti>`). Empty when the chain was rejected before the revocation check ran |
 | `signatures` | Yes | Signatures from verifier(s) |
 
@@ -309,3 +309,4 @@ For GDPR compliance, implement:
 | Version | Date | Changes |
 |---------|------|---------|
 | 0.1.0 | 2026-07-12 | Initial public working draft |
+| 0.1.1 | 2026-07-14 | §3.2 `policy` field definition documents the conditional `requested_version`/`used_version` entries for the missing-policy-version state (Spec 06 §6.5) |

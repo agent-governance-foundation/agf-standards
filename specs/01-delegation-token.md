@@ -1,8 +1,8 @@
 # Specification 01: Delegation Token Format
 
-**Version:** 0.1.0 (Draft)  
+**Version:** 0.1.1 (Draft)  
 **Status:** Working Draft  
-**Supersedes:** None  
+**Supersedes:** 0.1.0  
 **Layer:** Core format  
 
 ## 1. Introduction
@@ -75,7 +75,7 @@ The JWT header MUST contain:
 |-------|------|-------------|
 | `parent` | string | Parent delegation ID (for chain linking) |
 | `max_depth` | number | Maximum allowed sub-delegation depth (default: 5) |
-| `policy_version` | string | Policy version to use when evaluating this delegation (if omitted, PDP uses latest) |
+| `policy_version` | string | Policy version to evaluate this delegation under (if omitted, the PDP resolves the org's active policy). If present but not loadable, the PDP surfaces the mismatch and caps the decision at `ALLOW_WITH_CAUTION` — see Spec 06 §6.5 |
 | `constraints` | object | Additional constraints (time, location, etc.) |
 
 ### 2.5 Scope Format
@@ -286,3 +286,4 @@ Verifiers SHOULD allow up to 5 seconds of clock skew when checking `exp` and `ia
 | Version | Date | Changes |
 |---------|------|---------|
 | 0.1.0 | 2026-07-12 | Initial public working draft |
+| 0.1.1 | 2026-07-14 | §2.4 `policy_version` claim description corrected (PDP resolves the org's active policy, not "latest") and cross-referenced to Spec 06 §6.5 mismatch surfacing |
