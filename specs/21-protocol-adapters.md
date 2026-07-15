@@ -1,8 +1,8 @@
 # Specification 21: Protocol Adapters (MCP Gateway)
 
-**Version:** 0.1.0 (Draft)
+**Version:** 0.2.0 (Draft)
 **Status:** Working Draft  
-**Supersedes:** None  
+**Supersedes:** 0.1.0  
 **Layer:** Adapter  
 
 ## 1. Introduction
@@ -64,6 +64,8 @@ For a decision-gated method, the adapter builds a `DecideRequest` (chain from §
 - **ALLOW** → the original JSON-RPC request is forwarded upstream verbatim; the response carries an `X-AGF-Artifact-ID` header so the caller can correlate the forwarded response with the audit trail.
 - **DENY / REVIEW_REQUIRED / quota-exceeded / service unavailable** → the call is never forwarded upstream. The caller receives a JSON-RPC error (§4.4), not the raw HTTP status a direct `/v1/decide` caller would see — an MCP client speaks JSON-RPC and needs a JSON-RPC-shaped answer regardless of why authorization failed.
 
+The gateway emits an Execution Receipt for every mediated decision per Spec 07 §10.3 — `not_executed` for blocked calls, `executed` when the upstream responded, `unknown` on timeout or transport error — and returns its id in an `X-AGF-Receipt-ID` response header alongside `X-AGF-Artifact-ID`. Receipt persistence is best-effort: it never fails or delays the mediated call.
+
 ### 4.4 Error Handling
 
 Once a gateway is resolved from the URL, every failure — bad request shape, disabled gateway, missing chain, a non-ALLOW decision, upstream unreachable, upstream timeout — surfaces as a JSON-RPC error object in a `200` response, not an arbitrary HTTP status. An MCP client only knows how to interpret JSON-RPC errors; forcing it to branch on HTTP status codes it wasn't built to expect would break more integrations than it would help.
@@ -105,3 +107,4 @@ A decision-gated MCP call produces exactly the same audit artifact a direct `/v1
 | Version | Date | Changes |
 |---------|------|---------|
 | 0.1.0 | 2026-07-12 | Initial public working draft |
+| 0.2.0 | 2026-07-15 | Gateway emits Execution Receipts (Spec 07 §10.3) with `X-AGF-Receipt-ID` response header |

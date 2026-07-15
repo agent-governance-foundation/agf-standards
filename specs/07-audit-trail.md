@@ -1,8 +1,8 @@
 # Specification 07: Audit Trail and Decision Provenance
 
-**Version:** 0.1.1 (Draft)  
+**Version:** 0.2.0 (Draft)  
 **Status:** Working Draft  
-**Supersedes:** 0.1.0  
+**Supersedes:** 0.1.1  
 **Layer:** Core format  
 
 ## 1. Introduction
@@ -234,6 +234,39 @@ The endpoint rebuilds the canonical evidence payload (§4.3) from the document a
 
 `valid` is true only when the artifact carries at least one signature and every signature verifies. Fully offline verification (§8.5) without this endpoint remains possible for auditors holding the PDP's public key, since the document carries every field of the evidence payload.
 
+#### 6.3.1 Two-Stage Verification
+
+Verification is two-stage: **cryptographic** (are the signatures valid?) and **semantic** (is the recorded history consistent?). The response carries both results; `valid` keeps its original signature-only meaning for compatibility:
+
+```json
+{
+  "artifact_id": "dec_1735603300_a1b2c3d4",
+  "schema_version": "1.1",
+  "valid": true,
+  "signature_valid": true,
+  "semantic_valid": false,
+  "violations": [
+    {"code": "EXECUTED_AFTER_DENY", "detail": "receipt rcpt_1735603400_9f2e1c records execution of a denied action", "receipt_id": "rcpt_1735603400_9f2e1c"}
+  ],
+  "signatures": [
+    {"signer": "https://pdp.acme.com", "algorithm": "ES256", "valid": true, "reason": null}
+  ]
+}
+```
+
+Semantic checks run only when the cryptographic stage passes, and cover the artifact together with any correlated Execution Receipts (§10):
+
+| Code | Meaning |
+|------|---------|
+| `EXECUTED_AFTER_DENY` | A signature-valid Receipt records `outcome: executed` for a Decision whose `response.decision` is `DENY` (KERNEL-NEG-05, Spec 00 §6) |
+| `EXECUTED_WITHOUT_APPROVAL` | As above for `REVIEW_REQUIRED` with no approved approval request linked to the Decision |
+| `RECEIPT_WITHOUT_DECISION` | A Receipt references a `decision_ref` that does not resolve to a stored Decision artifact |
+| `RECEIPT_SIGNATURE_INVALID` | A correlated Receipt's signature fails verification (does not affect the artifact's own `signature_valid`) |
+| `POLICY_VERSION_MISMATCH` | The policy block records a requested-but-missing version (`used_version: null`) yet the response decision is an uncapped `ALLOW` — inconsistent with Spec 06 §6.5 |
+| `PARENT_REVOKED` | A delegation in the decided chain was revoked **before** the decision timestamp. A revocation made after the decision is not a violation — validity is evaluated at decision time (Spec 00 §5) — and continues to surface only through `revocation_state` |
+
+`semantic_valid` is true when no violations are found. A semantic violation never retroactively falsifies signatures; it means the signed evidence itself proves an enforcement or consistency failure.
+
 ## 7. Audit Requirements by Regulation
 
 | Regulation | Requirement |
@@ -304,9 +337,76 @@ For GDPR compliance, implement:
 - **Data minimization:** Do not log unnecessary personal data
 - **Access controls:** Restrict artifact access to authorized auditors only
 
-## 10. Change Log
+## 10. Execution Receipts
+
+A Decision artifact proves what was *permitted*. An **Execution Receipt** proves what *happened*: the signed record correlating a Decision to the attempted and actual outcome of the action. Receipts are the AGF serialization of the kernel Receipt object (Spec 00 §3.5).
+
+### 10.1 Receipt Format
+
+```json
+{
+  "receipt_id": "rcpt_1735603400_9f2e1c",
+  "decision_ref": "dec_1735603300_a1b2c3d4",
+  "attempted": true,
+  "outcome": "executed",
+  "upstream_status": 200,
+  "gateway": "mcp",
+  "completed_at": 1735603401,
+  "signer": "https://gateway.acme.com",
+  "algorithm": "ES256",
+  "signature": "base64...",
+  "signature_version": "1.0"
+}
+```
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `receipt_id` | Yes | Unique identifier (`rcpt_` prefix, same convention as `artifact_id`) |
+| `decision_ref` | Yes | `artifact_id` of exactly one Decision artifact |
+| `attempted` | Yes | Whether execution was attempted after the Decision |
+| `outcome` | Yes | `executed`, `not_executed`, or `unknown` — never inferred (Spec 00 §3.5) |
+| `upstream_status` | No | Transport-level outcome evidence (e.g. HTTP status), outside the signed payload |
+| `gateway` | Yes | The enforcement point that observed the outcome (`mcp`, `a2a`, `http`) |
+| `completed_at` | Yes | When the outcome was recorded |
+| `signer` | Yes | Identity of the enforcement point |
+| `algorithm` / `signature` | Yes | Signature per §4.2's honesty rules |
+| `signature_version` | Yes | Signed-payload layout version (currently `1.0`) |
+
+### 10.2 Signing
+
+The signature covers a named, closed payload — exactly `{receipt_id, decision_ref, attempted, outcome, completed_at, gateway, signature_version}` — canonically encoded as in §4.3 (sorted keys, compact separators). `upstream_status` and storage metadata are deliberately outside the signed payload: operational detail must never invalidate a receipt. §4.2's algorithm rules apply unchanged (ES256; any fallback recorded honestly).
+
+### 10.3 Emission
+
+Enforcement points that mediate execution (the protocol gateways, Specs 21–23) emit one Receipt per mediated decision:
+
+| Situation | `attempted` | `outcome` |
+|-----------|-------------|-----------|
+| Decision `DENY`, call blocked | `false` | `not_executed` |
+| Decision `REVIEW_REQUIRED` without approved approval, call blocked | `false` | `not_executed` |
+| Call forwarded, upstream responded (any status) | `true` | `executed` |
+| Call forwarded, timeout or transport error | `true` | `unknown` |
+
+A blocked call's receipt is the affirmative evidence of enforcement — emitting receipts only for allowed calls proves nothing about denials. Receipt persistence MUST be best-effort with respect to the mediated call: a failure to record a receipt is logged and counted, and MUST NOT fail or delay the proxied request. Gateways expose the receipt via an `X-AGF-Receipt-ID` response header alongside `X-AGF-Artifact-ID`.
+
+### 10.4 Lifecycle Rules
+
+1. Every Receipt MUST reference exactly one Decision (`decision_ref`).
+2. A Decision MAY have zero or more Receipts (retries, or multiple enforcement points).
+3. A Receipt MUST NOT exist without a resolvable Decision — an orphan receipt is a `RECEIPT_WITHOUT_DECISION` violation (§6.3.1).
+4. Receipts are evidence, not authority (Spec 00 §7.1): presenting a Receipt authorizes nothing.
+
+### 10.5 Query Interface
+
+- `GET /v1/receipts/{receipt_id}` — retrieve one receipt (org-scoped)
+- `GET /v1/receipts?decision_ref={artifact_id}` — all receipts for a Decision
+
+Receipt verification runs through `POST /v1/audit/verify` (§6.3.1), which checks receipt signatures and the receipt-vs-decision semantics together.
+
+## 11. Change Log
 
 | Version | Date | Changes |
 |---------|------|---------|
 | 0.1.0 | 2026-07-12 | Initial public working draft |
 | 0.1.1 | 2026-07-14 | §3.2 `policy` field definition documents the conditional `requested_version`/`used_version` entries for the missing-policy-version state (Spec 06 §6.5) |
+| 0.2.0 | 2026-07-15 | Added §10 Execution Receipts (kernel Receipt serialization: format, closed signed payload, gateway emission rules, lifecycle) and §6.3.1 two-stage verification with structured violation codes (EXECUTED_AFTER_DENY, EXECUTED_WITHOUT_APPROVAL, RECEIPT_WITHOUT_DECISION, RECEIPT_SIGNATURE_INVALID, POLICY_VERSION_MISMATCH, PARENT_REVOKED); Change Log renumbered §10→§11 |

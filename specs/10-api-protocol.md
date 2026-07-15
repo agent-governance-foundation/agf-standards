@@ -1,8 +1,8 @@
 # Specification 10: API Protocol
 
-**Version:** 0.3.0 (Draft)  
+**Version:** 0.4.0 (Draft)  
 **Status:** Working Draft  
-**Supersedes:** 0.2.0  
+**Supersedes:** 0.3.0  
 **Layer:** Core format  
 
 ## 1. Introduction
@@ -297,6 +297,12 @@ Query params:
 Request: `{"artifact": {...}}`  
 Response: `{"valid": true, "signer": "did:..."}`
 
+The verify response is two-stage — `signature_valid`, `semantic_valid`, and a structured `violations` array — per Spec 07 §6.3.1; the legacy `valid` field keeps its signature-only meaning.
+
+**`GET /v1/receipts/{receipt_id}`** — Retrieve an Execution Receipt (see Spec 07 §10)
+
+**`GET /v1/receipts?decision_ref={artifact_id}`** — All receipts correlated to a Decision artifact
+
 ### 5.7 Health Check API
 
 **`GET /health`** — Service health
@@ -383,3 +389,4 @@ Response:
 | 0.1.0 | 2026-07-12 | Initial public working draft |
 | 0.2.0 | 2026-07-14 | Documented the complete four-value `decision` enum (added missing `REVIEW_REQUIRED`) in §5.5 and the artifact-search filter, with kernel mapping reference (Spec 00 §4.2) |
 | 0.3.0 | 2026-07-14 | §5.5: added `policy_version_requested` / `policy_version_applied` / `error_code: POLICY_VERSION_NOT_FOUND` response fields for the missing-policy-version state (Spec 06 §6.5, KERNEL-NEG-03) |
+| 0.4.0 | 2026-07-15 | §5.6: Execution Receipt endpoints and two-stage verify response (Spec 07 §10, §6.3.1) |

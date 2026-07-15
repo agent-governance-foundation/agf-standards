@@ -1,8 +1,8 @@
 # Specification 11: Conformance Test Suite
 
-**Version:** 0.3.0 (Draft)  
+**Version:** 0.4.0 (Draft)  
 **Status:** Working Draft  
-**Supersedes:** 0.2.0  
+**Supersedes:** 0.3.0  
 **Layer:** Operational  
 
 ## 1. Introduction
@@ -46,6 +46,7 @@ Conformance testing ensures implementations correctly follow the specifications.
 | CHAIN-08 | Empty chain | Fail with `INVALID_REQUEST` |
 | CHAIN-09 | Constraint violation in token | Fail with `CONSTRAINT_VIOLATION` |
 | CHAIN-10 | Scope canonicalization applied before intersection | Pass (equivalent scopes treated as equal) |
+| CHAIN-11 | Duplicate `jti` within submitted chain | Fail with `INVALID_REQUEST` |
 
 ### 3.3 Trust Score Tests (Level 2)
 
@@ -193,7 +194,19 @@ AAP-Core (Spec 00 §6) REQUIRES five negative vectors at every conformance level
 | KERNEL-NEG-02 | Replayed action / artifact presented as authorization | fresh evaluation or rejection; stored `ALLOW` never honored as bearer authority |
 | KERNEL-NEG-03 | Requested policy version unavailable | surfaced per Spec 06 §6.5: `POLICY_VERSION_NOT_FOUND` + version echo, decision capped at `ALLOW_WITH_CAUTION` (POLICY-09/10) |
 | KERNEL-NEG-04 | Revoked parent grant in presented chain | `DENY` with `REVOKED` for the whole branch |
-| KERNEL-NEG-05 | Receipt claims execution of a denied action | signature-valid but reported as enforcement violation |
+| KERNEL-NEG-05 | Receipt claims execution of a denied action | signature-valid but flagged `EXECUTED_AFTER_DENY` (or `EXECUTED_WITHOUT_APPROVAL`) by two-stage verification (Spec 07 §6.3.1) |
+
+### 3.12 Execution Receipt Tests (Level 2)
+
+| Test ID | Description | Requirement |
+|---------|-------------|-------------|
+| RECEIPT-01 | ALLOW decision, call forwarded | `executed` receipt emitted, signature valid |
+| RECEIPT-02 | DENY decision, call blocked | `not_executed` receipt emitted |
+| RECEIPT-03 | REVIEW_REQUIRED without approved approval | `not_executed` receipt emitted |
+| RECEIPT-04 | Upstream timeout after forwarding | `unknown` receipt emitted |
+| RECEIPT-05 | Receipt persistence failure | proxied call unaffected |
+| RECEIPT-06 | Receipt whose `decision_ref` resolves to no Decision | `RECEIPT_WITHOUT_DECISION` violation |
+| RECEIPT-07 | `executed` receipt for a denied Decision | `EXECUTED_AFTER_DENY` violation (KERNEL-NEG-05) |
 
 ## 4. Test Environment
 
@@ -255,3 +268,4 @@ Overall: 75/77 passed (97.4%)
 | 0.1.0 | 2026-07-12 | Initial public working draft |
 | 0.2.0 | 2026-07-14 | Added §3.11 kernel negative vectors (KERNEL-NEG-01…05) required by AAP-Core (Spec 00, RFC 0001) |
 | 0.3.0 | 2026-07-14 | POLICY-09/10 reconciled with Spec 06 §6.5 (RFC 0001): trusted-issuer fallback removed; POLICY-09 = surfaced mismatch + `ALLOW_WITH_CAUTION` cap, POLICY-10 = artifact version echo. KERNEL-NEG-03 row updated to the resolved behavior |
+| 0.4.0 | 2026-07-15 | Added CHAIN-11 and §3.12 RECEIPT-01…07; KERNEL-NEG-05 concretized to the two-stage verification violation codes |

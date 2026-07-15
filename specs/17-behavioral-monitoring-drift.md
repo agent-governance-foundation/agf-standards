@@ -1,8 +1,8 @@
 # Specification 17: Behavioral Monitoring & Drift
 
-**Version:** 0.1.0 (Draft)  
+**Version:** 0.2.0 (Draft)  
 **Status:** Working Draft  
-**Supersedes:** None  
+**Supersedes:** 0.1.0  
 **Layer:** Profile  
 
 ## 1. Introduction
@@ -95,6 +95,10 @@ POST /v1/agents/{did}/baseline
 }
 ```
 
+### 4.3 Drift Findings as Invalidation Producers
+
+A critical drift finding MAY trigger an automated authority change (revocation or suspension of the affected agent's delegations) through the deployment's automated-response mechanism. Such a revocation uses reason `behavioral_drift` and carries the drift finding as `evidence` (Spec 05 §4.3, §4.3.1), realizing the kernel Invalidation cause `policy_drift` (Spec 00 §3.6). The correlation MUST be traversable: from the drift finding to the response execution to the revocation record, and back.
+
 ## 5. Recertification
 
 ### 5.1 Recertification Schedule
@@ -178,3 +182,4 @@ Recertification Trigger
 | Version | Date | Changes |
 |---------|------|---------|
 | 0.1.0 | 2026-07-12 | Initial public working draft |
+| 0.2.0 | 2026-07-15 | Drift findings as Invalidation producers: `behavioral_drift` revocations with evidence correlation (Spec 05, Spec 00 §3.6) |

@@ -35,6 +35,7 @@ are tracked separately:
 | `delegation-token.schema.json` | Spec 01 — Delegation Token Format | planned |
 | `delegation-chain.schema.json` | Spec 02 — Delegation Chain | planned |
 | `audit-record.schema.json` | Spec 07 — Audit Trail | planned |
+| `execution-receipt.schema.json` | Spec 07 §10 — Execution Receipts | planned |
 | `did-document.schema.json` | Spec 08 — Identity Registry | planned |
 | `trust-summary.schema.json` | Spec 24 — Trust Summary Format | planned |
 | `decision-api.openapi.yaml` | Spec 10 — API Protocol | planned |

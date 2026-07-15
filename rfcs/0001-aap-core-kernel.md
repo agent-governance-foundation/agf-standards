@@ -65,24 +65,14 @@ No new attack surface is introduced; the kernel adds no endpoints or formats bey
 - **Adopt an external kernel schema set directly.** The referenced governance templates are useful prior art, but AAP's objects carry protocol-specific semantics (chain correlation, decision-time validity, propagation bounds) that must stay aligned with Specs 01–07; the kernel must be extracted from, not bolted onto, the existing normative text.
 - **Publish the kernel as a separate repository/standard.** Maximizes reuse but splits governance of tightly coupled normative text. Layering within one suite achieves the same adoption shape with one change process.
 
-## Future work
-
-### Drift alert correlation
-
-Currently, behavioral drift findings (Spec 17) are recorded separately from
-decisions and do not produce Invalidation records. A future version of the
-specification will define how drift findings SHOULD be correlated with decisions
-and MAY produce Invalidation records when they change effective authority.
-
-### Execution receipts at gateways
-
-The protocol adapters (Specs 21–23) mediate execution and are the natural signers of kernel Receipts with observed outcomes. Emitting them is SHOULD-tier in Spec 00 §3.5 and not yet implemented in the reference implementation.
-
 ## Unresolved questions
 
 - Whether Specs 24–27 (cross-organization trust) should be grouped as a named "Federation" profile in the index.
+- Community review: the removal of POLICY-09's trusted-issuer fallback (see Resolved during draft) remains explicitly open for community input during this RFC's discussion period.
 
 ## Resolved during draft
 
 - **Spec 06 §6.5 vs Spec 11 POLICY-09/10** (2026-07-14): the two specs disagreed on policy-version-not-found behavior — Spec 06 required a uniform `NOT_APPLICABLE` with no fallback (which the reference implementation follows), while POLICY-09 described an issuer-trust-gated fallback. Resolved in Spec 06's favor: the trusted-issuer fallback is removed; a missing requested version MUST surface in the decide response (`error_code: POLICY_VERSION_NOT_FOUND`, `policy_version_requested` / `policy_version_applied: null`) and the decision is capped at `ALLOW_WITH_CAUTION`, mirroring the stale-revocation-list precedent (Spec 05 §5.4). See Spec 06 0.2.0, Spec 10 0.3.0, Spec 11 0.3.0, and the concretized KERNEL-NEG-03 in Spec 00 0.1.1.
 - Whether Receipt `outcome` observation and drift-linked Invalidation move from SHOULD to MUST when Spec 00 advances past Working Draft.
+- **Execution receipts** (2026-07-15): the gateways now emit signed Execution Receipts for every mediated decision (Spec 07 §10), and `/v1/audit/verify` is two-stage with structured violation codes (Spec 07 §6.3.1) — KERNEL-NEG-05 is fully testable.
+- **Drift correlation** (2026-07-15): automated responses to critical drift findings create revocations with reason `behavioral_drift` and the finding as `evidence` (Spec 05 §4.3.1, Spec 17), realizing the kernel `policy_drift` cause.

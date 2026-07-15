@@ -1,8 +1,8 @@
 # Specification 02: Delegation Chain Semantics
 
-**Version:** 0.1.0 (Draft)  
+**Version:** 0.2.0 (Draft)  
 **Status:** Working Draft  
-**Supersedes:** None  
+**Supersedes:** 0.1.0  
 **Layer:** Core format  
 
 ## 1. Introduction
@@ -148,6 +148,10 @@ If validation exceeds the maximum, the implementation MUST log a performance ale
 
 An implementation may express the table above as a single per-chain budget of `max(30ms, 8ms × chain length)` — consistent with the two anchor rows above — and take the alert-plus-metric path (a log line plus a counter and latency histogram) without rejecting: budget breaches indicate node health, not request validity.
 
+### 3.9 JTI Uniqueness Within a Chain
+
+A submitted chain MUST NOT contain two tokens with the same `jti`. Verifiers MUST reject such a chain with `INVALID_REQUEST` before scope evaluation. A duplicated token is either a replay artifact or a malformed chain; the continuity rules in §3.1 do not reliably catch self-referential duplicates.
+
 ## 4. Scope Inheritance Examples
 
 ### Example 1: Narrowing
@@ -283,3 +287,4 @@ Implementations MUST monitor validation time and alert if approaching limits. Co
 | Version | Date | Changes |
 |---------|------|---------|
 | 0.1.0 | 2026-07-12 | Initial public working draft |
+| 0.2.0 | 2026-07-15 | Added §3.9: duplicate `jti` within a submitted chain is rejected with `INVALID_REQUEST` (CHAIN-11, KERNEL-NEG-02) |

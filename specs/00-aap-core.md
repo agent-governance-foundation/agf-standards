@@ -1,8 +1,8 @@
 # Specification 00: AAP-Core — Normative Kernel
 
-**Version:** 0.1.1 (Draft)  
+**Version:** 0.2.0 (Draft)  
 **Status:** Working Draft  
-**Supersedes:** 0.1.0  
+**Supersedes:** 0.1.1  
 **Layer:** Kernel  
 
 ## 1. Introduction
@@ -122,7 +122,7 @@ Requirements:
 - Where the outcome is not observable by any component of the implementation, `outcome` MUST be `unknown` — it MUST NOT be inferred.
 - A Receipt is **evidence, not authority**: presenting a Receipt (or a Decision artifact) MUST NOT authorize any execution (§7.1).
 
-**AGF serialization:** signed audit artifact per Spec 07 §4 (signature rules apply to Receipts identically); query and verification per Spec 07 §6.
+**AGF serialization:** the Execution Receipt (Spec 07 §10); Decisions serialize as the audit artifact (Spec 07 §3). Verification of receipts and of receipt-vs-decision semantics runs through two-stage verification (Spec 07 §6.3.1).
 
 ### 3.6 Invalidation
 
@@ -198,7 +198,7 @@ Positive-path conformance is covered by the categories in Spec 11. The kernel ad
 | KERNEL-NEG-02 | Replayed action: a previously evaluated request (same Authority, Action, and request correlation id) re-presented, or a Decision/Receipt artifact presented as authorization | Fresh evaluation or rejection — a stored `ALLOW` MUST NOT be honored as bearer authority (§7.1); duplicate `jti` issuance MUST be rejected (Spec 01 §5.3) |
 | KERNEL-NEG-03 | Policy-version mismatch: requested `policy_ref` unavailable to the decider | MUST NOT evaluate under a different policy version; the mismatch MUST surface in the Decision (`POLICY_VERSION_NOT_FOUND` with a requested/applied version echo) and the outcome carries the `caution` qualifier — Spec 06 §6.5, Spec 11 POLICY-09/10 |
 | KERNEL-NEG-04 | Revoked parent grant: Invalidation (`cause: revoked`) exists for an ancestor of the presented Authority | `DENY` for the entire branch (Spec 05 §3); error `REVOKED` |
-| KERNEL-NEG-05 | Receipt for a denied action: a Receipt with `outcome: executed` whose `decision_ref` is a `DENY` or unresolved `REVIEW_REQUIRED` | The Receipt MUST verify as signature-valid but MUST be reported as an enforcement violation by audit verification (Spec 07 §6.3) |
+| KERNEL-NEG-05 | Receipt for a denied action: a Receipt with `outcome: executed` whose `decision_ref` is a `DENY` or unresolved `REVIEW_REQUIRED` | The Receipt MUST verify as signature-valid but MUST be flagged `EXECUTED_AFTER_DENY` (or `EXECUTED_WITHOUT_APPROVAL` for unresolved review) by two-stage verification (Spec 07 §6.3.1) |
 
 ## 7. Security Considerations
 
@@ -220,3 +220,4 @@ Receipt `outcome: unknown` is honest but weak: a system in which most Receipts a
 |---------|------|---------|
 | 0.1.0 | 2026-07-14 | Initial kernel specification, extracted as the normative core of Specs 01–27 (RFC 0001) |
 | 0.1.1 | 2026-07-14 | KERNEL-NEG-03 expected outcome concretized after the Spec 06 §6.5 / Spec 11 POLICY-09/10 reconciliation (RFC 0001): explicit `POLICY_VERSION_NOT_FOUND` surfacing + `caution`-qualified outcome |
+| 0.2.0 | 2026-07-15 | §3.5 Receipt serialization points at Spec 07 §10; KERNEL-NEG-05 concretized to the two-stage verification violation codes |

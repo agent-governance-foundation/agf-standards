@@ -1,8 +1,8 @@
 # Specification 23: Protocol Adapters (HTTP/REST Gateway)
 
-**Version:** 0.1.0 (Draft)
+**Version:** 0.2.0 (Draft)
 **Status:** Working Draft  
-**Supersedes:** None  
+**Supersedes:** 0.1.0  
 **Layer:** Adapter  
 
 ## 1. Introduction
@@ -68,6 +68,8 @@ For a decision-gated request, the adapter builds a `DecideRequest` (chain from �
 - **ALLOW / ALLOW_WITH_CAUTION** → the original request is forwarded upstream verbatim (headers, query string, and raw body bytes); the response carries an `X-AGF-Artifact-ID` header so the caller can correlate the forwarded response with the audit trail.
 - **DENY / REVIEW_REQUIRED / quota-exceeded / service unavailable** → the call is never forwarded upstream. The caller receives a real HTTP error (§4.4).
 
+The gateway emits an Execution Receipt for every mediated decision per Spec 07 §10.3 — `not_executed` for blocked calls, `executed` when the upstream responded, `unknown` on timeout or transport error — and returns its id in an `X-AGF-Receipt-ID` response header alongside `X-AGF-Artifact-ID`. Receipt persistence is best-effort: it never fails or delays the mediated call.
+
 ### 4.4 Error Handling
 
 Unlike Spec 21/22, this adapter does not wrap failures in a protocol envelope — a generic HTTP client speaks plain HTTP and expects a plain HTTP status code.
@@ -118,3 +120,4 @@ A decision-gated HTTP-gateway call produces exactly the same audit artifact a di
 | Version | Date | Changes |
 |---------|------|---------|
 | 0.1.0 | 2026-07-12 | Initial public working draft |
+| 0.2.0 | 2026-07-15 | Gateway emits Execution Receipts (Spec 07 §10.3) with `X-AGF-Receipt-ID` response header |
