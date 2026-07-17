@@ -32,7 +32,7 @@ The AGF wire serializations of the kernel objects; MUST be implemented to claim 
 
 ### Profiles
 
-Domain and policy layers over the kernel — trust zones, risk layers, human oversight, sector controls, and cross-organization trust (Specs 24, 26, 27) — each OPTIONAL and declaring its own conformance target.
+Domain and policy layers over the kernel — trust zones, risk layers, human oversight, sector controls, and cross-organization trust (Specs 24, 26, 27, 28) — each OPTIONAL and declaring its own conformance target.
 
 | # | Title | Status |
 |---|-------|--------|
@@ -48,6 +48,7 @@ Domain and policy layers over the kernel — trust zones, risk layers, human ove
 | [24](24-trust-summary-format.md) | Trust Summary Format (`AGF-TS-1.0`) | Working Draft |
 | [26](26-trust-relay-protocol.md) | Trust Relay Protocol (`AGF-TRP-1.0`) | Working Draft |
 | [27](27-global-trust-registry-protocol.md) | Global Trust Registry Protocol (`AGF-GTR-1.0`) | Working Draft |
+| [28](28-federation-revocation-sync.md) | Federation Revocation Sync | Working Draft |
 
 ### Adapters
 
@@ -98,7 +99,7 @@ Then explore the rest based on your area (core formats, profiles, adapters, and 
 - **Privacy/compliance:** [13](13-privacy-selective-disclosure.md), [18](18-regulatory-compliance-mapping.md)
 - **Governance/lifecycle:** [14](14-pre-deployment-governance.md), [15](15-human-oversight-escalation.md), [16](16-multi-agent-coordination.md), [17](17-behavioral-monitoring-drift.md)
 - **Protocol adapters:** [21](21-protocol-adapters.md), [22](22-a2a-protocol-adapter.md), [23](23-http-protocol-adapter.md)
-- **Cross-org trust:** [24](24-trust-summary-format.md), [25](25-canonical-delegation-serialization.md), [26](26-trust-relay-protocol.md), [27](27-global-trust-registry-protocol.md)
+- **Cross-org trust:** [24](24-trust-summary-format.md), [25](25-canonical-delegation-serialization.md), [26](26-trust-relay-protocol.md), [27](27-global-trust-registry-protocol.md), [28](28-federation-revocation-sync.md)
 
 ## Versioning
 
