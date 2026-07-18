@@ -1,7 +1,7 @@
 # Specification 29: Enterprise Identity Assurance
 
-**Version:** 0.2.0 (Draft)
-**Status:** Working Draft — §4-12 (the identity-provider/binding/evidence data model, tenant discovery, domain verification, the Identity Assurance annotation, JIT provisioning, login policies, group→role mapping, and break-glass accounts) has a reference implementation. SAML, LDAP/SCIM connectors, certificate monitoring, and session management (§13) are out of scope for this version.
+**Version:** 0.3.0 (Draft)
+**Status:** Working Draft — §4-15 (the identity-provider/binding/evidence data model, tenant discovery, domain verification, the Identity Assurance annotation, JIT provisioning, login policies, group→role mapping, break-glass accounts, the group-membership/lifecycle/audit foundation, SCIM provisioning, and Enterprise Directory Integration/LDAP) has a reference implementation. SAML, IdP-initiated SSO, certificate monitoring, and session management (§16) are out of scope for this version — SAML has a dedicated companion RFC as its own precondition-for-implementation gate.
 **Supersedes:** None — new profile
 **Layer:** Profile
 
@@ -17,7 +17,7 @@ This specification closes that gap for enterprise deployments: human authenticat
 
 **Federation, not migration.** An implementation MUST NOT store enterprise passwords. Identity remains at the IdP; this specification's data model stores only a trusted reference to it (§4.2) and evidence that a verification event occurred (§4.3), never the credential itself.
 
-**Stateless-first.** This version deliberately does not introduce a server-side session object. An implementation MAY continue to use whatever stateless bearer-token model it already has (e.g. Spec 01's delegation tokens, or an analogous short-lived access/refresh token pair for human actors) unmodified. §4.3's Authentication Evidence record is written once, at authentication time, and is never read or re-checked during authorization — it is audit evidence, not a live session gate. §13 discusses why session-scoped capabilities (remote logout, active-session listing) are deliberately deferred rather than folded into this version.
+**Stateless-first.** This version deliberately does not introduce a server-side session object. An implementation MAY continue to use whatever stateless bearer-token model it already has (e.g. Spec 01's delegation tokens, or an analogous short-lived access/refresh token pair for human actors) unmodified. §4.3's Authentication Evidence record is written once, at authentication time, and is never read or re-checked during authorization — it is audit evidence, not a live session gate. §16 discusses why session-scoped capabilities (remote logout, active-session listing) are deliberately deferred rather than folded into this version.
 
 **Immutable evidence over live state.** Instead of asking "does this session still exist," an implementation answers "how was this identity authenticated, and what does the record show" — a question whose answer does not depend on any state that can later be deleted out from under an audit. §4.3 and §7 are both designed around this: append-only, no revocation field, no dependency on session lifetime.
 
@@ -40,7 +40,7 @@ Authentication configuration for one connector, scoped to one organization.
 |-------|------|----------|--------------|
 | `id` | string | Yes | Provider identifier. |
 | `organization_id` | string | Yes | Owning organization. |
-| `connector_type` | string | Yes | `oidc` in this version. `saml`, `ldap`, `scim` are reserved values an implementation MAY accept in storage for forward compatibility but MUST reject at connection time with a clear "not yet supported" error rather than silently no-op. |
+| `connector_type` | string | Yes | `oidc` (§6) or `ldap` (§15) as of this version — note `ldap` providers do not use §6-8's authentication flow at all (§15.1). `scim` is not a distinct `connector_type`; it is a capability layered onto an existing provider (§14). `saml` is a reserved value an implementation MAY accept in storage for forward compatibility but MUST reject at connection time with a clear "not yet supported" error rather than silently no-op. |
 | `connector_config` | object | Yes | Non-secret connector configuration. For `oidc`: `issuer`, `client_id`, `redirect_uri` are REQUIRED. |
 | `display_name` | string | Yes | Shown to the user during tenant discovery (§6). |
 | `is_default` | boolean | Yes | When an organization has more than one active provider, tenant discovery (§6) resolves to the default. |
@@ -375,17 +375,166 @@ and needs to be able to find quickly when it happens. An implementation
 SHOULD notify other administrators when it occurs, though this
 specification does not mandate a specific notification channel.
 
-## 13. Non-Goals (This Version)
+## 13. Group Membership Foundation
 
-- SAML, LDAP, and SCIM connectors — `connector_type` reserves the values (§4.1) but no behavior is specified for them in this version. SAML in particular is intentionally deferred to its own workstream rather than built alongside the items in this version: it introduces a materially different risk class (XML signature verification, well-known vulnerability classes like XXE and signature-wrapping attacks) that deserves dedicated implementation care and a security review, not an incremental addition alongside unrelated OIDC-scoped work.
-- Certificate/metadata expiry monitoring for certificate-bearing connector types — deferred alongside SAML (§4.1's `certificate_expires_at` field is reserved but OIDC has no admin-visible certificate to monitor; JWKS rotation is transparent).
-- IdP-initiated SSO — deferred alongside SAML, where it is the standard mechanism (an OIDC-only equivalent is non-standard and out of scope).
-- Directory sync (SCIM-style continuous provisioning/deprovisioning beyond what §9's JIT provisioning and §11's per-login role sync already provide).
-- Any per-session capability — active-session listing, remote logout, continuous access evaluation. §2 explains why session-scoped capabilities are deliberately not this version's problem: they require a genuinely different, persistent-session architecture that this specification does not assume every implementation has, and forcing that assumption would have made every other section of this specification a prerequisite for a session feature most deployments do not need on day one. A future specification MAY define that architecture without requiring changes to §4-12 of this one.
+Prerequisite for §14/§15: group membership from any source must be
+separable from the role it produces, so an implementation can always
+answer "what did the source assert" independently of "what role AGF
+computed from it." Feeding a directory source's group data directly into
+role assignment (skipping this record) would make that separation
+impossible and would give SCIM/LDAP no way to converge on the same
+mechanism §11 already defines for OIDC.
 
-## 14. Change Log
+### 13.1 External Group Membership
+
+| Field | Type | Required | Description |
+|-------|------|----------|--------------|
+| `id` | string | Yes | |
+| `external_identity_id` | string | Yes | The binding (§4.2) this membership belongs to. |
+| `provider_id` | string | Yes | |
+| `group_id` | string | No | The source's stable group identifier, when it has one. |
+| `group_name` | string | Yes | The matchable value (§11's `match_value`) — always present regardless of source. |
+| `source` | string | Yes | `oidc` \| `scim` \| `ldap`. |
+| `last_seen` | string (ISO 8601) | Yes | |
+
+The tuple `(external_identity_id, group_name)` MUST be unique. An
+implementation MUST upsert into this record from every source that
+observes membership: an OIDC login's `groups` claim, a SCIM group
+PATCH/PUT, an LDAP sync sweep. §11's `resolve_mapped_role()` reads
+`group_name` values from here — not from a claims dict, not from
+whatever a directory source most recently returned — for `match_type:
+group` rules. `match_type: claim` rules remain claims-only (§11.1), since
+SCIM/LDAP have no equivalent structure.
+
+### 13.2 Identity Lifecycle
+
+`ExternalIdentityRow.status` (§4.2, originally `active | unlinked`)
+expands to a 5-state lifecycle: `pending | active | suspended | unlinked
+| archived`.
+
+| State | Meaning |
+|-------|---------|
+| `pending` | Known from a directory source but not yet allowed to authenticate (e.g. a SCIM user created with `active: false`). |
+| `active` | Linked to an account, may authenticate. |
+| `suspended` | Temporarily blocked (e.g. SCIM `active: false` on an existing user) — reversible, distinct from `unlinked`. |
+| `unlinked` | No longer present at the source (SCIM `DELETE`, absent from an LDAP sweep) — the binding is preserved for audit, never hard-deleted. |
+| `archived` | Reserved for future retention tooling; no behavior is specified for it in this version. |
+
+`provisioned` and `linked` are deliberately not separate states: this
+specification's provisioning mechanisms (§9, §14, §15) all create the
+account and its binding in one atomic step, so there is no separately
+observable moment between them for a state transition to mark.
+
+### 13.3 Identity Audit Events
+
+An implementation SHOULD emit a distinct, dot-namespaced event for each
+lifecycle-relevant action: `identity.provisioned`, `identity.updated`,
+`identity.group.changed`, `identity.deprovisioned`, `identity.linked`,
+`identity.unlinked`, `identity.sync.started`, `identity.sync.completed`,
+`identity.sync.failed`. This specification does not mandate a specific
+audit-event transport — whatever mechanism an implementation already uses
+for other identity events (§9's JIT-provisioning event, §12.3's
+break-glass event) is sufficient, provided the event type strings
+distinguish these actions from each other.
+
+## 14. Enterprise Provisioning (SCIM)
+
+An OPTIONAL capability layered onto an existing Identity Provider (§4.1),
+regardless of its `connector_type` — mirrors how real IdPs pair SCIM
+provisioning with the same application registration that already handles
+authentication, rather than requiring a second provider record.
+
+### 14.1 Scope
+
+This specification does not require full SCIM 2.0 (RFC 7644) compliance —
+only the operations and shapes real SCIM clients (Okta, Entra ID)
+actually send:
+
+- User and Group resource CRUD, including `ServiceProviderConfig`.
+- Filtering: `filter=userName eq "..."` and `filter=externalId eq "..."`
+  only. An implementation MUST reject any other filter operator or
+  attribute with an explicit error, never by silently ignoring the filter
+  or treating it as a no-match.
+- PATCH: the `Operations` array shapes for `active`, `name`, `emails` (User)
+  and `members` add/remove (Group) — including the path-less
+  `{"op": "replace", "value": {"active": false}}` form some IdPs send for
+  deactivation, alongside the path'd form.
+- `DELETE` on a User MUST NOT hard-delete — it transitions the binding to
+  `unlinked` (§13.2), consistent with every other identity-removal
+  operation this specification defines.
+
+### 14.2 Authentication
+
+A SCIM client authenticates with a bearer token scoped to exactly one
+Identity Provider — not a general-purpose credential, and not further
+scoped by anything in the request URL or body. An implementation SHOULD
+support minting, naming (for administrator recognition — an unlabeled
+token becomes unidentifiable within months), and revoking/rotating this
+token independently of the provider's other configuration.
+
+### 14.3 Group Membership
+
+A Group PATCH/PUT's member list MUST be written to External Group
+Membership (§13.1) — never directly to a user's role. Role assignment
+happens exclusively through §11's existing resolution path, re-evaluated
+after the membership write, with §11.2's manual-override-safety guarantee
+applying identically regardless of whether the triggering event was a
+login or a provisioning action.
+
+## 15. Enterprise Directory Integration (LDAP/AD)
+
+Read-only directory synchronization — **not** an authentication
+mechanism. This specification uses "Enterprise Directory Integration"
+rather than "LDAP/Active Directory" deliberately: LDAP is the protocol,
+Active Directory is one deployment of it, and this section applies
+equally to OpenLDAP, 389 Directory Server, FreeIPA, or any other
+LDAP-speaking directory without redefinition.
+
+### 15.1 Scope
+
+An implementation periodically searches a configured directory for users
+and groups, and provisions/updates/deprovisions AGF accounts and group
+membership (§13.1) accordingly. It MUST NOT validate an end user's login
+credentials against the directory (no LDAP bind-as-authentication) —
+users provisioned this way authenticate through an already-configured
+OIDC connector (§9's normal flow) or password, exactly as any other
+account does. An implementation's setup documentation MUST state this
+boundary explicitly, since "directory sync" is easily mistaken for "you
+can now log in with your directory password."
+
+### 15.2 Deployment Prerequisite
+
+A hosted implementation of this specification is commonly deployed
+separately from the directory it synchronizes against (e.g.
+cloud-hosted service, on-premises Active Directory behind a firewall).
+Network reachability between the two is a deployment prerequisite this
+specification does not solve — an implementation MUST document this
+requirement rather than silently assuming a connection will succeed.
+
+### 15.3 Sync Behavior
+
+- Sync MUST run on a schedule, and MAY additionally be triggered
+  on-demand. Both triggers MUST use the same underlying sync logic — an
+  implementation MUST NOT maintain two divergent code paths for
+  "scheduled" vs. "manual" sync.
+- Each configured directory source MUST be synced independently, with
+  failure isolation: one source being unreachable MUST NOT prevent any
+  other source's sync from completing.
+- A user present in a previous sync but absent from the current one MUST
+  be transitioned to `unlinked` (§13.2) — not hard-deleted.
+- Provisioning reuses the same account-creation mechanism as §9/§14 — an
+  implementation MUST NOT maintain a third, separate user-creation code
+  path for directory-sourced accounts.
+
+## 16. Non-Goals (This Version)
+
+- SAML connectors, including IdP-initiated SSO and certificate/metadata expiry monitoring for certificate-bearing connector types (`certificate_expires_at`, §4.1, is reserved but unused by `oidc`/`ldap`) — deferred to its own workstream given a materially different risk class (XML signature verification, well-known vulnerability classes like XXE and signature-wrapping attacks) that warrants a dedicated design document, threat model, and security review before implementation starts. See the companion RFC (`agf-profile/implementation/rfc-saml-connector.md`) for that design; it is a precondition for SAML work, not a substitute for the review itself.
+- Any per-session capability — active-session listing, remote logout, continuous access evaluation. §2 explains why session-scoped capabilities are deliberately not this version's problem: they require a genuinely different, persistent-session architecture that this specification does not assume every implementation has, and forcing that assumption would have made every other section of this specification a prerequisite for a session feature most deployments do not need on day one. A future specification MAY define that architecture without requiring changes to §4-15 of this one.
+
+## 17. Change Log
 
 | Version | Date | Changes |
 |---------|------|---------|
 | 0.1.0 | 2026-07-18 | Initial public working draft |
 | 0.2.0 | 2026-07-18 | Added JIT provisioning (§9), login policies (§10), group→role mapping (§11, including the manual-override-safety requirement in §11.2 — a role sync must never silently revert an administrator's manual role promotion), and break-glass accounts (§12). §4 extended with role-source/idp-mapped-role/is-break-glass fields (§4.5) and the Role Mapping object (§4.6). §13 (renumbered from §9) narrowed to what remains deferred: SAML and its dependents (IdP-initiated SSO, certificate monitoring), directory sync, and session-scoped capabilities — SAML is intentionally out of scope for this version, reserved for a dedicated workstream given its distinct security-review requirements (XML signature verification, XXE, signature-wrapping attacks). |
+| 0.3.0 | 2026-07-18 | Added the Group Membership Foundation (§13 — External Group Membership as the shared substrate every source converges on, a 5-state identity lifecycle, and an `identity.*` audit event taxonomy), SCIM provisioning (§14, a practical subset — not full RFC 7644 — with unsupported filter/PATCH expressions explicitly rejected rather than silently ignored; group PATCH writes to §13.1's membership record, never directly to a role), and Enterprise Directory Integration/LDAP (§15, read-only sync, explicitly not an authentication mechanism; renamed from "LDAP/Active Directory" since LDAP is the protocol and AD one deployment of it). §16 (renumbered from §13) narrowed further now that SCIM and LDAP are specified; SAML remains out of scope, now pointing to a dedicated companion RFC as its precondition-for-implementation gate. |

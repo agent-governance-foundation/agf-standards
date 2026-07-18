@@ -49,7 +49,7 @@ Domain and policy layers over the kernel — trust zones, risk layers, human ove
 | [26](26-trust-relay-protocol.md) | Trust Relay Protocol (`AGF-TRP-1.0`) | Working Draft |
 | [27](27-global-trust-registry-protocol.md) | Global Trust Registry Protocol (`AGF-GTR-1.0`) | Working Draft |
 | [28](28-federation-revocation-sync.md) | Federation Revocation Sync | Working Draft |
-| [29](29-enterprise-identity-assurance.md) | Enterprise Identity Assurance | Working Draft |
+| [29](29-enterprise-identity-assurance.md) | Enterprise Identity Assurance | Working Draft — §4-15 has a reference implementation; SAML (§16) out of scope, pending a dedicated companion RFC |
 
 ### Adapters
 
