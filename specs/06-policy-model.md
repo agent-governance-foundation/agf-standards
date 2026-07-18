@@ -21,6 +21,8 @@ For the reference implementation, policies are written in **Rego** (Open Policy 
 
 Alternative languages (Cedar, OPA, custom) can be used with appropriate adapters.
 
+The reference implementation evaluates Rego via OPA's REST API, falling back to a stub evaluator when no OPA server is reachable (e.g. local dev/test), so the decision path doesn't hard-depend on a running OPA instance.
+
 ### 2.2 Policy Structure
 
 ```rego
@@ -200,7 +202,7 @@ policy: "acme/policies/roles/finance@1.0.0"
 ### 6.1 Evaluation Flow
 
 ```
-Request → Fetch applicable policies → Build input → Evaluate Rego → Return decision
+Request → Fetch applicable policies → Build input → Evaluate Rego (OPA, stub fallback) → Return decision
 ```
 
 ### 6.2 Multiple Policies
