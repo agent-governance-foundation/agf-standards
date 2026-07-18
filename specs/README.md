@@ -49,6 +49,7 @@ Domain and policy layers over the kernel — trust zones, risk layers, human ove
 | [26](26-trust-relay-protocol.md) | Trust Relay Protocol (`AGF-TRP-1.0`) | Working Draft |
 | [27](27-global-trust-registry-protocol.md) | Global Trust Registry Protocol (`AGF-GTR-1.0`) | Working Draft |
 | [28](28-federation-revocation-sync.md) | Federation Revocation Sync | Working Draft |
+| [29](29-enterprise-identity-assurance.md) | Enterprise Identity Assurance | Working Draft |
 
 ### Adapters
 
@@ -93,7 +94,7 @@ Then read the specs in this order:
 
 Then explore the rest based on your area (core formats, profiles, adapters, and operational documents alike):
 
-- **Identity/keys:** [08](08-identity-registry.md), [09](09-key-management.md)
+- **Identity/keys:** [08](08-identity-registry.md), [09](09-key-management.md), [29](29-enterprise-identity-assurance.md) (human/enterprise identity, distinct from 08's agent DIDs)
 - **APIs:** [10](10-api-protocol.md)
 - **Operations:** [11](11-conformance.md), [12](12-emergency-procedures.md), [19](19-operational-runbooks.md)
 - **Privacy/compliance:** [13](13-privacy-selective-disclosure.md), [18](18-regulatory-compliance-mapping.md)
