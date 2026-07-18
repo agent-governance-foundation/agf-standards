@@ -1,7 +1,7 @@
 # Specification 29: Enterprise Identity Assurance
 
-**Version:** 0.3.0 (Draft)
-**Status:** Working Draft — §4-15 (the identity-provider/binding/evidence data model, tenant discovery, domain verification, the Identity Assurance annotation, JIT provisioning, login policies, group→role mapping, break-glass accounts, the group-membership/lifecycle/audit foundation, SCIM provisioning, and Enterprise Directory Integration/LDAP) has a reference implementation. SAML, IdP-initiated SSO, certificate monitoring, and session management (§16) are out of scope for this version — SAML has a dedicated companion RFC as its own precondition-for-implementation gate.
+**Version:** 0.4.0 (Draft)
+**Status:** Working Draft — §4-18 (the identity-provider/binding/evidence data model, tenant discovery, domain verification, the Identity Assurance annotation, JIT provisioning, login policies, group→role mapping, break-glass accounts, the group-membership/lifecycle/audit foundation, SCIM provisioning, Enterprise Directory Integration/LDAP, Session Governance, Dynamic Roles and Permissions, and Passwordless Authentication/WebAuthn) has a reference implementation. SAML, IdP-initiated SSO, and certificate monitoring (§19) are out of scope for this version — SAML has a dedicated companion RFC as its own precondition-for-implementation gate.
 **Supersedes:** None — new profile
 **Layer:** Profile
 
@@ -17,7 +17,7 @@ This specification closes that gap for enterprise deployments: human authenticat
 
 **Federation, not migration.** An implementation MUST NOT store enterprise passwords. Identity remains at the IdP; this specification's data model stores only a trusted reference to it (§4.2) and evidence that a verification event occurred (§4.3), never the credential itself.
 
-**Stateless-first.** This version deliberately does not introduce a server-side session object. An implementation MAY continue to use whatever stateless bearer-token model it already has (e.g. Spec 01's delegation tokens, or an analogous short-lived access/refresh token pair for human actors) unmodified. §4.3's Authentication Evidence record is written once, at authentication time, and is never read or re-checked during authorization — it is audit evidence, not a live session gate. §16 discusses why session-scoped capabilities (remote logout, active-session listing) are deliberately deferred rather than folded into this version.
+**Stateless-first.** An implementation MAY continue to use whatever stateless bearer-token model it already has (e.g. Spec 01's delegation tokens, or an analogous short-lived access/refresh token pair for human actors) unmodified, and this remains the default: an implementation that never enables §16's OPTIONAL session governance carries zero session-related state. §4.3's Authentication Evidence record is written once, at authentication time, and is never read or re-checked during authorization — it is audit evidence, not a live session gate, and remains so regardless of whether §16 is enabled. §16 defines the OPTIONAL live-session layer (token revocation, active-session listing, remote logout) for implementations that need it, deliberately kept a separate, additive object from Authentication Evidence rather than retrofitted into it — see §16.1 for why the two do not merge.
 
 **Immutable evidence over live state.** Instead of asking "does this session still exist," an implementation answers "how was this identity authenticated, and what does the record show" — a question whose answer does not depend on any state that can later be deleted out from under an audit. §4.3 and §7 are both designed around this: append-only, no revocation field, no dependency on session lifetime.
 
@@ -49,7 +49,7 @@ Authentication configuration for one connector, scoped to one organization.
 | `status` | string | Yes | `active` \| `disabled`. |
 | `certificate_expires_at` | string (ISO 8601) | No | Reserved for certificate-bearing connector types (SAML); unused by `oidc`. |
 | `jit_provisioning_enabled` | boolean | Yes | Default `false`. See §9. |
-| `default_role` | string | Yes | `owner` \| `admin` \| `viewer`, default `viewer`. The role a JIT-provisioned account receives absent a group-mapping match (§9, §11). |
+| `default_role` | string | Yes | `owner` \| `admin` \| `viewer` (or a custom role name, §17.2), default `viewer`. The role a JIT-provisioned account receives absent a group-mapping match (§9, §11). |
 | `login_policies` | object | Yes | Default `{}`. See §10. |
 
 A connector's client secret (where applicable) MUST be stored encrypted at rest, separately from `connector_config`, and MUST NOT be returned in any response to any endpoint that reads this object back — not even to the organization that created it.
@@ -96,7 +96,7 @@ An append-only record that an authentication event occurred. This is the object 
 | `country` | string | No | |
 | `expires_at` | string (ISO 8601) | No | Informational only — an audit-retention horizon, never checked at authorization time. Absent by default. |
 
-No `session_id`, no revocation field. Deleting or invalidating a live session, if an implementation has one at all, is entirely orthogonal to this record — the record documents that authentication happened; whether a subsequent bearer token derived from it is still valid is a separate concern this specification does not govern (§2).
+No `session_id`, no revocation field. Deleting or invalidating a live session, if an implementation has one at all, is entirely orthogonal to this record — the record documents that authentication happened; whether a subsequent bearer token derived from it is still valid is §16's concern, when an implementation enables it, never this record's.
 
 ### 4.4 Organization Domain
 
@@ -122,9 +122,11 @@ depends on being able to tell a manual role grant from an IdP-derived one:
 
 | Field | Type | Required | Description |
 |-------|------|----------|--------------|
-| `role` | string | Yes | The *effective* role — unchanged in meaning from before this specification. Every existing reader of this field (authorization checks, token claims) continues to work unmodified. |
+| `role` | string | Yes | The *effective* role — unchanged in meaning from before this specification. Every existing reader of this field (authorization checks, token claims) continues to work unmodified. Where §17's optional dynamic-role model is implemented, this is the name of the `Role` object `role_id` (§17.2) resolves to, kept in sync for any reader that still only understands a role name (e.g. a token claim). |
 | `role_source` | string | Yes | `manual` \| `idp`. Default `manual`. Governs whether §11's sync is allowed to overwrite `role` on login. |
 | `idp_mapped_role` | string \| null | No | The most recent value §11's mapping computed, independent of `role_source`. Audit/troubleshooting visibility only — never itself the effective role. |
+
+§11.2's manual-override-safety guarantee applies to `role`/`role_source` identically whether an implementation resolves roles from the fixed three-value set below or from §17's dynamic Role catalog — §17 changes the value space `role` is drawn from, never this section's synchronization rule.
 
 ### 4.6 Role Mapping
 
@@ -137,7 +139,7 @@ A rule translating an IdP-asserted group or claim into an AGF role.
 | `match_type` | string | Yes | `group` \| `claim`. |
 | `match_key` | string | Yes | The claim name to inspect — default `groups` for `match_type: group`. |
 | `match_value` | string | Yes | For `match_type: group`, a value that MUST appear in the named claim's list. For `match_type: claim`, a value the named claim's (stringified) scalar MUST equal. |
-| `role` | string | Yes | `owner` \| `admin` \| `viewer`. |
+| `role` | string | Yes | `owner` \| `admin` \| `viewer`, or the name of an organization-scoped custom role (§17.2) where §17 is implemented. |
 | `priority` | integer | Yes | Default `0`. Rules are evaluated in ascending order; the first match wins. |
 
 ## 5. Domain Verification
@@ -526,15 +528,151 @@ requirement rather than silently assuming a connection will succeed.
   implementation MUST NOT maintain a third, separate user-creation code
   path for directory-sourced accounts.
 
-## 16. Non-Goals (This Version)
+## 16. Session Governance
+
+### 16.1 Relationship to Authentication Evidence
+
+This section defines an OPTIONAL, additive layer — a live, mutable Session object, distinct from and layered on top of §4.3's Authentication Evidence, never merged into it. The two answer different questions with different lifecycle requirements: Evidence answers "how was this identity authenticated, and what does the record show" and MUST remain append-only, with no field an implementation can later change or clear (§2, §4.3). Session answers "is a bearer token derived from that authentication still valid right now" — a question whose answer changes over time by design (rotation, revocation, expiry), which is exactly why it MUST NOT live on the append-only record. An implementation that never enables this section keeps §2's stateless-first default entirely unmodified; Authentication Evidence continues to exist, and continues to record real authentication events, whether or not Session Governance is ever turned on.
+
+### 16.2 Token Revocation (`token_version`)
+
+An implementation SHOULD maintain a monotonically-increasing integer on the user/account object (`token_version`, default `0`) and embed its value as a claim in every access and refresh token issued to that account. Token validation MUST reject a token whose embedded `token_version` does not match the account's current value — this is the mechanism by which an implementation invalidates an already-issued, not-yet-expired token, which a purely stateless bearer-token model (§2's default) has no way to do at all.
+
+An implementation MUST bump `token_version` at minimum when: an account's credential changes (password change/reset), and when the account holder explicitly requests invalidating every other active session ("log out everywhere"). Bumping `token_version` is a coarser instrument than per-session revocation (§16.3) — it invalidates every outstanding token for the account in one step, including ones the account holder may not know exist, which is exactly the property a credential-compromise response needs.
+
+This mechanism is independent of §16.3: an implementation MAY support token-version revocation without persistent sessions, MAY support both together, but MUST NOT treat one as a substitute for the other — a compromised refresh token surviving a password change because the implementation only tracked it in a Session record it forgot to revoke is exactly the failure mode this section closes.
+
+### 16.3 Persistent Sessions
+
+An implementation MAY additionally offer a persistent Session object, gated behind an explicit, organization-level opt-in (default OFF) — session tracking is real additional infrastructure and audit surface an organization SHOULD choose deliberately, not inherit silently the moment this section is implemented.
+
+**Session object:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|--------------|
+| `id` | string | Yes | Session identifier. |
+| `user_id` | string | Yes | The account this session belongs to. |
+| `authentication_method` | string | Yes | `password` \| `oidc` \| `webauthn` (§18) \| `break_glass`. An implementation MAY extend this set for other first factors it supports (e.g. `saml`, once implemented per §19), but MUST keep each value protocol-specific rather than reusing one generic value (e.g. `"sso"`) once more than one federated protocol exists — otherwise this field can no longer distinguish which protocol actually authenticated the session. Best-effort/audit, never itself an authorization input. |
+| `device_name` | string | No | Best-effort, derived from request metadata (e.g. user-agent) at session creation. Display-only — an implementation MUST NOT use this field, or anything derived from it, as a security input; it is trivially spoofable by the caller. |
+| `refresh_token_hash` | string | Yes | A hash of the current refresh token, never the token itself. |
+| `created_at` | string (ISO 8601) | Yes | |
+| `last_active_at` | string (ISO 8601) | No | Updated on each successful token refresh through this session. |
+| `revoked_at` | string (ISO 8601) | No | Set on explicit revocation (§16.5) or on the reuse-detection response (§16.4). |
+
+**Creation:** a session MUST be created at successful authentication, for every first-factor mechanism an implementation supports (password, SSO/OIDC, WebAuthn per §18, break-glass) — an implementation MUST NOT create sessions for only some authentication paths while silently exempting others from the same audit/revocation surface; if a given authentication path cannot yet create a session, that MUST be a stated, temporary implementation gap, not a permanent design choice.
+
+### 16.4 Refresh Rotation and Reuse Detection
+
+Each use of a refresh token MUST atomically rotate `refresh_token_hash` to a newly-issued token's hash before returning that new token to the caller — the previous token becomes invalid for any subsequent use the instant rotation succeeds, not merely "eventually."
+
+Presenting a refresh token whose hash does not match the session's *current* `refresh_token_hash` — i.e., a token from earlier in the rotation chain, not merely the most recent one — MUST be treated as reuse and MUST revoke the *entire session* (setting `revoked_at`, invalidating every token derived from it), not only the presented stale token. Reuse of an old refresh token is a signal that the token was captured and is now being replayed by an attacker racing the legitimate holder; revoking only the single reused token would leave whichever party (attacker or legitimate holder) currently holds the *latest* rotated token still authenticated, which defeats the purpose of detecting reuse at all.
+
+### 16.5 Capabilities
+
+Where §16.3 is enabled, an implementation SHOULD expose:
+
+- Self-service: list the calling account's own active sessions (at minimum `device_name`, `created_at`, `last_active_at`); revoke one session; revoke all sessions (a "log out everywhere" action, which SHOULD also bump `token_version` per §16.2 — belt-and-suspenders against any session the revocation itself might race).
+- Administrative oversight: for a privileged caller within the same organization, the equivalent list/revoke-one/revoke-all operations targeting another member's sessions. An admin's own "revoke all" of another user MUST NOT be assumed to exempt the admin's own session if the admin revokes their own account's sessions by the same mechanism — an implementation MUST apply the same reuse-safe revocation semantics (§16.4) regardless of whose session is being closed.
+- A credential change (password change) SHOULD revoke the account's active sessions as part of the same operation, not merely bump `token_version` — both mechanisms MUST fire together for a credential-compromise response to be complete (§16.2).
+
+## 17. Dynamic Roles and Permissions
+
+### 17.1 Motivation
+
+§4.5/§4.6/§9/§11 above describe role assignment against a fixed three-value set (`owner` \| `admin` \| `viewer`). This section defines an OPTIONAL, backward-compatible replacement: a data-driven Permission/Role model that an implementation MAY adopt without changing the meaning of anything already normative above. Every MUST in §9/§11/§12 that references "the role" continues to hold exactly as written, whether the value space behind it is the fixed three-value set or this section's dynamic catalog.
+
+### 17.2 Data Model
+
+| Object | Fields | Notes |
+|--------|--------|-------|
+| Permission | `id`, `key` (e.g. `team.invite`), `description` | The catalog. An implementation MUST NOT define a permission for a capability it does not actually gate somewhere in its own code — an ungated permission is a promise the implementation cannot keep, and is worse than the permission not existing. |
+| Role | `id`, `organization_id` (nullable), `name`, `is_built_in` | `organization_id: null` denotes a built-in role shared across every organization; non-null denotes a role scoped to exactly one organization (a "custom role", OPTIONAL). |
+| RolePermission | `role_id`, `permission_id` | Join table — the grant. |
+
+An implementation adopting this section MUST seed built-in roles that reproduce the pre-existing three-tier behavior exactly as a default: `owner` holding every defined permission, `viewer` holding none, and `admin` at whatever practical subset the implementation's own pre-existing `owner`-only gates already implied — adopting this section MUST NOT itself change what any existing account can do.
+
+`role` (§4.5) is denormalized from `role_id` for any reader that only understands a role name (most importantly, a bearer-token claim, which SHOULD NOT require a database lookup to decode) — an implementation MUST keep the two in sync on every write, never let `role` and the object `role_id` points to diverge.
+
+### 17.3 Custom Roles
+
+An implementation MAY allow an organization to define additional, organization-scoped roles, each granted an arbitrary subset of the Permission catalog (§17.2). Where offered:
+
+- Creating, modifying, or deleting a custom role SHOULD itself be gated by a dedicated permission (e.g. `roles.manage`) — role management is itself a capability this catalog can describe, not a special case above it.
+- Deleting a role currently assigned to any account MUST be rejected with a clear, distinct error — an implementation MUST NOT silently cascade the deletion into an undefined or null role for those accounts.
+- An implementation SHOULD reserve the built-in `owner` role specifically from ever being assignable by name through the same path a custom role is assigned — matches whatever elevated, owner-specific safeguards (e.g. "cannot remove the last owner") the implementation already applies to that role and does not want a custom-role path to bypass.
+
+### 17.4 Interaction with §11's Role Mapping
+
+§11's resolution and §11.2's manual-override-safety guarantee are unmodified by this section: a Role Mapping rule's `role` (§4.6) simply names a value from whichever space is in effect (fixed three-value, or this section's catalog including any custom roles) — §11's sync logic has no awareness of, and no dependency on, which.
+
+### 17.5 Non-Goals (This Section)
+
+Deliberately out of scope for this version of dynamic roles: role inheritance/hierarchy between custom roles, multiple roles held simultaneously by one account, delegating a role or its permissions to an agent identity (that is Spec 06/08's delegation-chain model — a disjoint mechanism this specification does not touch, not merely a deferred extension of this one), and condition-based or assurance-level-gated permissions (e.g. "this permission requires an `aal2` authentication," which depends on assurance data this specification defines in §7 but does not yet wire into permission evaluation anywhere).
+
+## 18. Passwordless Authentication (WebAuthn)
+
+### 18.1 Scope
+
+An OPTIONAL first-factor authentication mechanism using the WebAuthn/FIDO2 standard ("passkeys"), additive to an account that already exists via password or SSO — a credential is registered *after* an existing authenticated session, the same posture this specification already uses for other account-security enrollments. A passwordless-only signup path (creating a new account with no password at all) is out of scope for this version.
+
+### 18.2 Data Model
+
+| Field | Type | Required | Description |
+|-------|------|----------|--------------|
+| `id` | string | Yes | |
+| `user_id` | string | Yes | The account this credential is registered to. |
+| `credential_id` | string | Yes | The authenticator-assigned credential identifier (base64url). MUST be unique across all accounts. |
+| `public_key` | string | Yes | The credential's public key (COSE format, base64url). |
+| `sign_count` | integer | Yes | The authenticator's signature counter, as last observed (§18.6). |
+| `transports` | array of string | No | Informational (e.g. `internal`, `hybrid`) — never a security input. |
+| `device_name` | string | Yes | Best-effort display label, same posture as §16.3's `device_name` — MUST NOT be used as a security input. |
+| `created_at` | string (ISO 8601) | Yes | |
+| `last_used_at` | string (ISO 8601) | No | |
+
+This object intentionally does not extend §4.2/§4.3 (External Identity / Authentication Evidence) — those are structurally coupled to federated, IdP-mediated authentication (`external_identity_id`, `issuer`, `subject`). A WebAuthn credential authenticates directly against this implementation, with no external IdP in the loop, so a passkey login does not produce an Authentication Evidence record and §7's `identity_assurance` annotation remains absent for it — the same, already-normative outcome §7.2 specifies for "any human principal whose most recent authentication has no corresponding Authentication Evidence record." An implementation MUST NOT fabricate an Evidence record for a passkey login merely to produce an annotation.
+
+### 18.3 Registration and Authentication Ceremonies
+
+Both ceremonies (registration — binding a new credential; authentication — using one to log in) proceed in two request legs, consistent with WebAuthn's `navigator.credentials.create()`/`.get()` browser flow. An implementation MUST carry ceremony state (the challenge) between the two legs via a short-lived, single-use, signed token scoped to that ceremony — MUST NOT require server-side challenge storage, keeping this section consistent with §2's stateless-first principle. The token SHOULD expire within a short window (this specification recommends 5 minutes) and MUST be rejected if presented after expiry or for a ceremony type other than the one it was issued for.
+
+### 18.4 Relying Party Configuration
+
+The Relying Party ID and allowed origin(s) MUST be explicit, implementation-controlled configuration, and MUST NOT be derived from a request's `Host` header or any other caller-supplied value — deriving either dynamically is one of the most common WebAuthn deployment mistakes, since a spoofed or misconfigured proxy `Host` header would otherwise influence which origins a credential is scoped to, undermining the entire binding WebAuthn is meant to provide.
+
+Attestation conveyance SHOULD be `none` for this version — broadest authenticator compatibility, and avoids the vendor/privacy friction full attestation verification brings. Verifying a specific hardware vendor or model via attestation is out of scope for this version.
+
+### 18.5 Enumeration Safety
+
+The authentication-options endpoint (the first leg of the authentication ceremony, taking an email/identifier) MUST return an identical response shape whether or not that identifier corresponds to a real account with at least one registered credential — an empty allowed-credentials list and a real, single-use challenge token either way. This mirrors §6.2's tenant-discovery enumeration-safety requirement for the identical reason: a caller MUST NOT be able to distinguish "no such account" from "account exists but has no passkey" by response shape or timing.
+
+### 18.6 Clone/Replay Detection
+
+Each authenticator asserts a signature counter (`sign_count`) that MUST be non-decreasing across successful authentications. An implementation MUST reject an authentication whose presented counter is less than or equal to the credential's stored value, with one stated exception: many platform authenticators (e.g. built-in biometric unlock) always report a counter of `0` and never increment it — both stored and presented being `0` MUST NOT be treated as reuse, since neither carries any signal in that case. A counter that decreases from a previously-nonzero value, or repeats a previously-nonzero value, is treated as a possible cloned authenticator; an implementation SHOULD emit a distinct signal for this specific failure mode, separate from a generic failed-assertion event, since it is the one outcome here that suggests credential cloning rather than a simple wrong device or cancelled prompt.
+
+### 18.7 Credential Lifecycle
+
+An implementation SHOULD cap the number of credentials a single account may register (this specification does not mandate a specific number) and MUST reject registration beyond that cap with a clear error rather than accepting unbounded registrations. Removing an account's last remaining passkey MUST be permitted — this section's WebAuthn is strictly additive (§18.1), so a password or SSO login path always remains available as a fallback for every account able to register a passkey at all; an implementation offering a passwordless-only account model would need its own lockout-prevention rule, which this version does not define.
+
+### 18.8 Interaction with SSO Enforcement and MFA
+
+§6.3's `enforce_sso`/`allow_password_fallback` gate MUST apply to passkey login exactly as it applies to password login — a locally-registered passkey MUST NOT function as a way around an organization's SSO-required policy.
+
+A successful passkey authentication SHOULD be treated as satisfying an organization's `mfa_required` login policy (§10) without requiring a separate TOTP/second-factor step — a WebAuthn ceremony is itself a possession factor, typically combined with a biometric or PIN verification at the authenticator, and requiring an additional factor on top is redundant friction rather than additional security. This mirrors how an SSO-authenticated login is already exempted from a local MFA requirement under this specification.
+
+### 18.9 Non-Goals (This Section)
+
+Deliberately out of scope for this version: step-up (re-)authentication for specific high-risk actions after an already-authenticated session exists, a passwordless-only account/signup model, magic-link or other non-WebAuthn passwordless mechanisms, and administrator-initiated passkey reset/recovery for a locked-out user (self-service registration/rename/removal of one's own credentials only).
+
+## 19. Non-Goals (This Version)
 
 - SAML connectors, including IdP-initiated SSO and certificate/metadata expiry monitoring for certificate-bearing connector types (`certificate_expires_at`, §4.1, is reserved but unused by `oidc`/`ldap`) — deferred to its own workstream given a materially different risk class (XML signature verification, well-known vulnerability classes like XXE and signature-wrapping attacks) that warrants a dedicated design document, threat model, and security review before implementation starts. See the companion RFC (`agf-profile/implementation/rfc-saml-connector.md`) for that design; it is a precondition for SAML work, not a substitute for the review itself.
-- Any per-session capability — active-session listing, remote logout, continuous access evaluation. §2 explains why session-scoped capabilities are deliberately not this version's problem: they require a genuinely different, persistent-session architecture that this specification does not assume every implementation has, and forcing that assumption would have made every other section of this specification a prerequisite for a session feature most deployments do not need on day one. A future specification MAY define that architecture without requiring changes to §4-15 of this one.
+- §17.5 and §18.9 list this version's dynamic-roles and passwordless-specific non-goals respectively, rather than repeating them here.
 
-## 17. Change Log
+## 20. Change Log
 
 | Version | Date | Changes |
 |---------|------|---------|
 | 0.1.0 | 2026-07-18 | Initial public working draft |
 | 0.2.0 | 2026-07-18 | Added JIT provisioning (§9), login policies (§10), group→role mapping (§11, including the manual-override-safety requirement in §11.2 — a role sync must never silently revert an administrator's manual role promotion), and break-glass accounts (§12). §4 extended with role-source/idp-mapped-role/is-break-glass fields (§4.5) and the Role Mapping object (§4.6). §13 (renumbered from §9) narrowed to what remains deferred: SAML and its dependents (IdP-initiated SSO, certificate monitoring), directory sync, and session-scoped capabilities — SAML is intentionally out of scope for this version, reserved for a dedicated workstream given its distinct security-review requirements (XML signature verification, XXE, signature-wrapping attacks). |
 | 0.3.0 | 2026-07-18 | Added the Group Membership Foundation (§13 — External Group Membership as the shared substrate every source converges on, a 5-state identity lifecycle, and an `identity.*` audit event taxonomy), SCIM provisioning (§14, a practical subset — not full RFC 7644 — with unsupported filter/PATCH expressions explicitly rejected rather than silently ignored; group PATCH writes to §13.1's membership record, never directly to a role), and Enterprise Directory Integration/LDAP (§15, read-only sync, explicitly not an authentication mechanism; renamed from "LDAP/Active Directory" since LDAP is the protocol and AD one deployment of it). §16 (renumbered from §13) narrowed further now that SCIM and LDAP are specified; SAML remains out of scope, now pointing to a dedicated companion RFC as its precondition-for-implementation gate. |
+| 0.4.0 | 2026-07-18 | Added three new sections: Session Governance (§16 — an OPTIONAL live-session layer kept separate from the append-only Authentication Evidence record, covering a token-version revocation mechanism for invalidating an already-issued token before its natural expiry, and an OPTIONAL per-organization persistent-session object with atomic refresh-token rotation and whole-session reuse detection); Dynamic Roles and Permissions (§17 — a backward-compatible, OPTIONAL replacement for the fixed three-value role set used throughout §4.5/§4.6/§9/§11, built from a Permission/Role catalog that reproduces the pre-existing three-tier behavior exactly by default, plus organization-scoped custom roles as an additional OPTIONAL capability); and Passwordless Authentication/WebAuthn (§18 — an OPTIONAL, additive passkey first factor with its own credential object, enumeration-safety and Relying-Party-configuration requirements, and clone/replay detection for the WebAuthn signature counter). §4.1/§4.3/§4.5/§4.6 lightly amended to point at the new sections without changing any existing normative meaning; §2's "Stateless-first" principle clarified as an explicit, OPTIONAL opt-in rather than a reversal of the default. Old §16 (Non-Goals) renumbered to §19, its per-session-capability item removed (now specified in §16); old §17 (Change Log) renumbered to §20. |
