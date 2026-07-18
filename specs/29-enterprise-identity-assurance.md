@@ -1,7 +1,7 @@
 # Specification 29: Enterprise Identity Assurance
 
-**Version:** 0.1.0 (Draft)
-**Status:** Working Draft — §4-7 (the identity-provider/binding/evidence data model, tenant discovery, domain verification, and the Identity Assurance annotation on decision artifacts) has a reference implementation. SAML/LDAP/SCIM connectors, JIT provisioning without invite, login policies, and session management (§9) are out of scope for this version.
+**Version:** 0.2.0 (Draft)
+**Status:** Working Draft — §4-12 (the identity-provider/binding/evidence data model, tenant discovery, domain verification, the Identity Assurance annotation, JIT provisioning, login policies, group→role mapping, and break-glass accounts) has a reference implementation. SAML, LDAP/SCIM connectors, certificate monitoring, and session management (§13) are out of scope for this version.
 **Supersedes:** None — new profile
 **Layer:** Profile
 
@@ -17,7 +17,7 @@ This specification closes that gap for enterprise deployments: human authenticat
 
 **Federation, not migration.** An implementation MUST NOT store enterprise passwords. Identity remains at the IdP; this specification's data model stores only a trusted reference to it (§4.2) and evidence that a verification event occurred (§4.3), never the credential itself.
 
-**Stateless-first.** This version deliberately does not introduce a server-side session object. An implementation MAY continue to use whatever stateless bearer-token model it already has (e.g. Spec 01's delegation tokens, or an analogous short-lived access/refresh token pair for human actors) unmodified. §4.3's Authentication Evidence record is written once, at authentication time, and is never read or re-checked during authorization — it is audit evidence, not a live session gate. §9 discusses why session-scoped capabilities (remote logout, active-session listing) are deliberately deferred rather than folded into this version.
+**Stateless-first.** This version deliberately does not introduce a server-side session object. An implementation MAY continue to use whatever stateless bearer-token model it already has (e.g. Spec 01's delegation tokens, or an analogous short-lived access/refresh token pair for human actors) unmodified. §4.3's Authentication Evidence record is written once, at authentication time, and is never read or re-checked during authorization — it is audit evidence, not a live session gate. §13 discusses why session-scoped capabilities (remote logout, active-session listing) are deliberately deferred rather than folded into this version.
 
 **Immutable evidence over live state.** Instead of asking "does this session still exist," an implementation answers "how was this identity authenticated, and what does the record show" — a question whose answer does not depend on any state that can later be deleted out from under an audit. §4.3 and §7 are both designed around this: append-only, no revocation field, no dependency on session lifetime.
 
@@ -48,6 +48,9 @@ Authentication configuration for one connector, scoped to one organization.
 | `allow_password_fallback` | boolean | Yes | Default true. The safety valve against a misconfigured `enforce_sso` locking out every admin (§6.3). |
 | `status` | string | Yes | `active` \| `disabled`. |
 | `certificate_expires_at` | string (ISO 8601) | No | Reserved for certificate-bearing connector types (SAML); unused by `oidc`. |
+| `jit_provisioning_enabled` | boolean | Yes | Default `false`. See §9. |
+| `default_role` | string | Yes | `owner` \| `admin` \| `viewer`, default `viewer`. The role a JIT-provisioned account receives absent a group-mapping match (§9, §11). |
+| `login_policies` | object | Yes | Default `{}`. See §10. |
 
 A connector's client secret (where applicable) MUST be stored encrypted at rest, separately from `connector_config`, and MUST NOT be returned in any response to any endpoint that reads this object back — not even to the organization that created it.
 
@@ -68,7 +71,7 @@ A permanent, one-purpose binding: this AGF user corresponds to this subject at t
 | `identity_type` | string | Yes | `human` in this version. |
 | `email` | string | Yes | The email claim presented at first link. |
 | `email_verified` | boolean | Yes | Whether the IdP asserted the email as verified. |
-| `linked_at` | string (ISO 8601) | Yes | |
+| `linked_at` | string (ISO 8601) | Yes | | 
 | `last_login` | string (ISO 8601) | No | Updated on every subsequent authentication through this binding. |
 | `status` | string | Yes | `active` \| `unlinked`. |
 
@@ -110,6 +113,33 @@ Domain-ownership verification, the prerequisite for tenant discovery (§6) to sa
 | `verified_at` | string (ISO 8601) | No | |
 | `verified_by` | string | No | The user who triggered a successful verification check. |
 
+### 4.5 Role-Source Extension on the AGF User Object
+
+This specification does not define the base user/account object — that
+belongs to whatever implementation this profile sits on top of. It does,
+however, require three fields on it, since §11's role-mapping sync
+depends on being able to tell a manual role grant from an IdP-derived one:
+
+| Field | Type | Required | Description |
+|-------|------|----------|--------------|
+| `role` | string | Yes | The *effective* role — unchanged in meaning from before this specification. Every existing reader of this field (authorization checks, token claims) continues to work unmodified. |
+| `role_source` | string | Yes | `manual` \| `idp`. Default `manual`. Governs whether §11's sync is allowed to overwrite `role` on login. |
+| `idp_mapped_role` | string \| null | No | The most recent value §11's mapping computed, independent of `role_source`. Audit/troubleshooting visibility only — never itself the effective role. |
+
+### 4.6 Role Mapping
+
+A rule translating an IdP-asserted group or claim into an AGF role.
+
+| Field | Type | Required | Description |
+|-------|------|----------|--------------|
+| `id` | string | Yes | |
+| `provider_id` | string | Yes | The Identity Provider (§4.1) this rule applies to. |
+| `match_type` | string | Yes | `group` \| `claim`. |
+| `match_key` | string | Yes | The claim name to inspect — default `groups` for `match_type: group`. |
+| `match_value` | string | Yes | For `match_type: group`, a value that MUST appear in the named claim's list. For `match_type: claim`, a value the named claim's (stringified) scalar MUST equal. |
+| `role` | string | Yes | `owner` \| `admin` \| `viewer`. |
+| `priority` | integer | Yes | Default `0`. Rules are evaluated in ascending order; the first match wins. |
+
 ## 5. Domain Verification
 
 An implementation MUST reject any public/consumer email domain (the well-known set: `gmail.com`, `outlook.com`, `yahoo.com`, `hotmail.com`, and equivalents) at claim time, before a record is even created — two organizations cannot both plausibly own `gmail.com`, and allowing the claim would make tenant discovery (§6) ambiguous or spoofable. This check MUST reuse whatever free-email classification the implementation already applies to organization registration, rather than maintaining a second, divergent list.
@@ -149,7 +179,7 @@ An implementation SHOULD rate-limit this endpoint distinctly from general API tr
 
 When `enforce_sso: true` and `allow_password_fallback: false` on the resolved provider, an implementation MUST reject non-SSO (e.g. password) authentication for accounts in that organization, with an error that directs the caller toward SSO rather than a generic invalid-credentials response — the two failure modes have different remediations and MUST NOT be conflated in the response the caller sees. This MUST be enforced even for accounts that still hold a local credential from before `enforce_sso` was enabled.
 
-Independently, an implementation MUST always preserve some non-SSO recovery path for at least one privileged account per organization (a "break glass" mechanism), regardless of `enforce_sso` — a misconfigured provider (wrong issuer, revoked client credentials at the IdP) MUST NOT be able to permanently lock an organization out of its own AGF account. This version treats `allow_password_fallback` as the interim safety valve (default `true`); a dedicated break-glass account flow is deferred to a later version (§9).
+Independently, an implementation MUST always preserve some non-SSO recovery path for at least one privileged account per organization (a "break glass" mechanism), regardless of `enforce_sso` — a misconfigured provider (wrong issuer, revoked client credentials at the IdP) MUST NOT be able to permanently lock an organization out of its own AGF account. `allow_password_fallback` (default `true`) is the coarse, provider-level safety valve; §12 defines the finer-grained, per-account break-glass mechanism.
 
 ## 7. Identity Assurance Annotation
 
@@ -213,17 +243,149 @@ An implementation MAY additionally retain the raw claims, encrypted, in a record
 
 §7.3 is exhaustive — no field beyond that table appears in the signed annotation. An implementation offering an authenticated audit surface for more detail (e.g. `email`, `email_verified` from §4.2) MUST apply organization-scoped access control equivalent to what it already applies to any other org-internal audit data; this specification does not create a new disclosure boundary, it inherits the one Spec 13 already establishes.
 
-## 9. Non-Goals (This Version)
+## 9. JIT Provisioning
 
-- SAML, LDAP, and SCIM connectors — `connector_type` reserves the values (§4.1) but no behavior is specified for them in this version.
-- JIT provisioning without a prior invitation — this version requires an implementation to gate first-time binding creation (§4.2) on an existing, unexpired invitation mechanism the implementation already has for adding members to an organization; provisioning a new account from IdP claims alone is out of scope.
-- Login policies (IP/country/device/risk-based restrictions).
-- A dedicated break-glass account flow — §6.3 describes the interim safety valve this version relies on instead.
-- Certificate/metadata expiry monitoring for certificate-bearing connector types.
-- Directory sync, group-to-role mapping beyond whatever static role model the implementation already has, and any per-session capability — active-session listing, remote logout, continuous access evaluation. §2 explains why session-scoped capabilities are deliberately not this version's problem: they require a genuinely different, persistent-session architecture that this specification does not assume every implementation has, and forcing that assumption would have made every other section of this specification a prerequisite for a session feature most deployments do not need on day one. A future specification MAY define that architecture without requiring changes to §4-8 of this one.
+§6.1/§7.2's baseline requires a prior invitation before a first-time binding
+(§4.2) can be created — this section defines the OPTIONAL alternative.
 
-## 10. Change Log
+When `IdentityProviderRow.jit_provisioning_enabled` (§4.1) is `true`, an
+implementation MAY create a new account directly from a successful
+authentication with no prior invitation, using the resolved organization's
+domain verification (§5) as the trust boundary that replaces the
+invitation — an account can only be JIT-provisioned into an organization
+whose verified domain matches the authenticated email, so this MUST NOT be
+enabled without §5 already being satisfied for tenant discovery to have
+resolved the provider at all.
+
+The new account's role MUST be: the result of §11's role-mapping evaluation
+if any rule matches, else `default_role` (§4.1). Its `role_source` (§4.5)
+MUST be `idp` — a JIT-provisioned account was never assigned a role by an
+administrator, so there is nothing "manual" to protect (§11).
+
+An implementation SHOULD record a distinct audit event for first-time JIT
+creation, separate from routine login, so an administrator can see new
+accounts appearing without an invitation as they happen.
+
+## 10. Login Policies
+
+`IdentityProviderRow.login_policies` (§4.1) is evaluated on every
+authentication through that provider, after claims are verified and before
+any binding/evidence work — a failing policy MUST reject the
+authentication before any state changes.
+
+```json
+{
+  "allowed_ip_ranges": ["10.0.0.0/8"],
+  "blocked_countries": ["RU", "KP"],
+  "allowed_countries": ["US", "CA", "GB", "IN"],
+  "mfa_required": true
+}
+```
+
+| Field | Type | Description |
+|-------|------|--------------|
+| `allowed_ip_ranges` | array of CIDR strings | When present, the caller's IP MUST fall within at least one range. If configured and the caller's IP cannot be determined, the implementation MUST reject the authentication rather than silently permit it — an implementation that bothered to configure this control is making a deliberate statement that unknown-IP callers are not welcome. |
+| `blocked_countries` / `allowed_countries` | array of ISO country codes | Only evaluated when the caller's country is actually known. An implementation MUST NOT treat an unresolvable country (e.g. no geolocation capability configured) as a policy violation — that would silently lock out every login the moment one of these fields is set, on a deployment that never opted into geolocation at all. |
+| `mfa_required` | boolean | The authentication's derived `mfa` value (§7.3) MUST be `true`, or the attempt is rejected. |
+
+`device_trust_required` and `risk_score_threshold`, present in earlier
+drafts of this specification, are deliberately absent — no device-trust or
+human-login risk score is defined anywhere in this specification for a
+policy to threshold against, and a field with no computable value behind
+it is worse than no field at all.
+
+IP-to-country resolution is intentionally unspecified by this
+specification (an implementation MAY use an offline database or any other
+method) but SHOULD prefer a method that does not transmit caller IP
+addresses to a third party, consistent with §8's minimization principle.
+
+## 11. Group→Role Mapping
+
+### 11.1 Resolution
+
+On every authentication (not only first-time linking), an implementation
+evaluates the resolved provider's Role Mapping rules (§4.6) in ascending
+`priority` order against the verified claims; the first rule whose
+`match_value` is found (§4.6) determines the *mapped role*. If no rule
+matches, there is no mapped role for that login.
+
+### 11.2 Sync MUST NOT Overwrite a Manual Grant
+
+This is the normative core of this section, and exists because of a
+concrete failure mode: an administrator manually promotes a user to
+`owner`; that user's IdP group has not yet caught up; on the user's very
+next login, a naive sync would silently revert them to whatever the group
+mapping computes. An implementation MUST NOT do this. Precisely:
+
+- When a login produces a mapped role (§11.1), an implementation MUST
+  always update `idp_mapped_role` (§4.5) to that value, regardless of
+  `role_source`.
+- An implementation MUST only overwrite the effective `role` (§4.5) with
+  the mapped role when `role_source == "idp"`.
+- When `role_source == "manual"`, a mapped role MUST be recorded in
+  `idp_mapped_role` for administrator visibility but MUST NOT change
+  `role`. The divergence itself (`role` manually set to `owner` while
+  `idp_mapped_role` currently says `viewer`) is the audit signal an
+  administrator needs, not a defect to reconcile automatically.
+- Any administrative action that manually sets a user's `role` MUST also
+  set `role_source = "manual"` in the same operation — this is the actual
+  mechanism that prevents the failure mode above; setting `role` without
+  also setting `role_source` reopens it.
+- An implementation SHOULD offer an explicit action to revert
+  `role_source` back to `"idp"` (immediately re-applying `idp_mapped_role`
+  if present), so a manual override is a deliberate, reversible choice
+  rather than a one-way trapdoor.
+
+### 11.3 First-Time Linking
+
+For JIT-provisioned accounts (§9), the mapped role takes precedence over
+`default_role`. For invitation-accepted accounts, the mapped role takes
+precedence over the invitation's administrator-assigned role as well — an
+active, configured group mapping is a deliberate ongoing policy an
+administrator opted into, and MUST take precedence over what may be a
+stale role choice made once, at invitation time.
+
+## 12. Break-Glass Accounts
+
+### 12.1 The Gap This Section Closes
+
+A password-reset flow that does not check `enforce_sso` (§6.3) is not a
+break-glass mechanism — it is an unintended, silent, unaudited bypass of
+the organization's SSO policy, available to *any* account, not a
+deliberately designated one. An implementation MUST NOT allow this: the
+password-reset/forgot-password flow MUST reject issuing or redeeming a
+credential-setting token for an account whose organization enforces SSO
+(§6.3), unless that specific account is designated break-glass (§12.2).
+
+### 12.2 Designation
+
+An account MAY be designated `is_break_glass` (§4.5's user-object
+extension list gains one more field here: `is_break_glass: boolean`,
+default `false`). Only a break-glass account is exempt from §6.3's
+password-login rejection and from §12.1's reset restriction. Designation
+MUST be restricted to the same privilege level an implementation already
+requires for organization-owner-level actions.
+
+### 12.3 Audit
+
+A successful password-based login by a break-glass account, while its
+organization enforces SSO, MUST be recorded as a distinct event type from
+routine login — this is the signal an administrator needs to see rarely
+and needs to be able to find quickly when it happens. An implementation
+SHOULD notify other administrators when it occurs, though this
+specification does not mandate a specific notification channel.
+
+## 13. Non-Goals (This Version)
+
+- SAML, LDAP, and SCIM connectors — `connector_type` reserves the values (§4.1) but no behavior is specified for them in this version. SAML in particular is intentionally deferred to its own workstream rather than built alongside the items in this version: it introduces a materially different risk class (XML signature verification, well-known vulnerability classes like XXE and signature-wrapping attacks) that deserves dedicated implementation care and a security review, not an incremental addition alongside unrelated OIDC-scoped work.
+- Certificate/metadata expiry monitoring for certificate-bearing connector types — deferred alongside SAML (§4.1's `certificate_expires_at` field is reserved but OIDC has no admin-visible certificate to monitor; JWKS rotation is transparent).
+- IdP-initiated SSO — deferred alongside SAML, where it is the standard mechanism (an OIDC-only equivalent is non-standard and out of scope).
+- Directory sync (SCIM-style continuous provisioning/deprovisioning beyond what §9's JIT provisioning and §11's per-login role sync already provide).
+- Any per-session capability — active-session listing, remote logout, continuous access evaluation. §2 explains why session-scoped capabilities are deliberately not this version's problem: they require a genuinely different, persistent-session architecture that this specification does not assume every implementation has, and forcing that assumption would have made every other section of this specification a prerequisite for a session feature most deployments do not need on day one. A future specification MAY define that architecture without requiring changes to §4-12 of this one.
+
+## 14. Change Log
 
 | Version | Date | Changes |
 |---------|------|---------|
 | 0.1.0 | 2026-07-18 | Initial public working draft |
+| 0.2.0 | 2026-07-18 | Added JIT provisioning (§9), login policies (§10), group→role mapping (§11, including the manual-override-safety requirement in §11.2 — a role sync must never silently revert an administrator's manual role promotion), and break-glass accounts (§12). §4 extended with role-source/idp-mapped-role/is-break-glass fields (§4.5) and the Role Mapping object (§4.6). §13 (renumbered from §9) narrowed to what remains deferred: SAML and its dependents (IdP-initiated SSO, certificate monitoring), directory sync, and session-scoped capabilities — SAML is intentionally out of scope for this version, reserved for a dedicated workstream given its distinct security-review requirements (XML signature verification, XXE, signature-wrapping attacks). |
