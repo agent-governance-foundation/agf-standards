@@ -9,6 +9,31 @@ Example documents for the six kernel schemas in [`../`](../), used by [`check.py
   kernel-meaningful reason (not just a typo).
 - `kernel-neg-05.decision.json` / `kernel-neg-05.flagged.json` — a special pair,
   see below.
+- `authority-jwt.valid.json` / `authority-jwt.invalid.json` — a special pair,
+  see below.
+
+## authority-jwt: JWT-to-kernel mapping conformance
+
+`authority.schema.json` models the abstract kernel Authority object
+(`id`/`grantor`/`grantee`/...), not any one wire format — Spec 00 §3.2 gives
+the normative mapping to AGF's actual JWT delegation-token claims
+(`jti`→`id`, `iss`→`grantor`, `sub`→`grantee`, `iat`→`issued_at`,
+`exp`→`expires_at`, `parent`→`parent`, `constraints`→`constraints`,
+`policy_version`→`policy_ref`). Nothing else in this repo checks that the
+mapping is actually applied correctly — a document can satisfy
+`authority.schema.json` in isolation while still misattributing which party
+is the grantor and which is the grantee.
+
+These two fixtures are each `{"jwt_claims": {...}, "kernel_mapped": {...}}`
+— `check.py` applies the Spec 00 §3.2 mapping to `jwt_claims` and asserts
+the result equals `kernel_mapped` (mapping fidelity) **and** that
+`kernel_mapped` validates against `authority.schema.json` (structural
+conformance). Both must hold for `.valid.`; at least one must fail for
+`.invalid.`. `authority-jwt.invalid.json`'s `kernel_mapped` is individually
+schema-valid (all required fields present, correct types) but swaps
+`grantor`/`grantee` relative to what `jwt_claims`'s `iss`/`sub` actually
+say — proving this check catches mapping errors that pure schema validation
+would miss entirely.
 
 All example data is fictional (`example.com`, `acme` namespace); no production
 identifiers appear in this repository.

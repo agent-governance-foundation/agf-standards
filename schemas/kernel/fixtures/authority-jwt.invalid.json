@@ -1,0 +1,23 @@
+{
+  "_comment": "kernel_mapped is individually schema-valid (all required fields present, correct types) but swaps grantor/grantee relative to jwt_claims's iss/sub — proves the check catches mapping-fidelity errors, not just schema shape.",
+  "jwt_claims": {
+    "iss": "did:agf:acme:alice",
+    "sub": "did:agf:acme:agent:builder",
+    "jti": "del_99c58967734f49ab",
+    "scope": ["read:source-code", "run:build"],
+    "iat": 1735603200,
+    "exp": 1735689600,
+    "constraints": {},
+    "policy_version": "acme/policies/build/access@1.0.0"
+  },
+  "kernel_mapped": {
+    "id": "del_99c58967734f49ab",
+    "grantor": "did:agf:acme:agent:builder",
+    "grantee": "did:agf:acme:alice",
+    "scope": ["read:source-code", "run:build"],
+    "issued_at": 1735603200,
+    "expires_at": 1735689600,
+    "constraints": {},
+    "policy_ref": "acme/policies/build/access@1.0.0"
+  }
+}
