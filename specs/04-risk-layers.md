@@ -1,8 +1,8 @@
 # Specification 04: Risk Layers (Inherent, Environmental, Trust)
 
-**Version:** 0.1.0 (Draft)  
+**Version:** 0.1.1 (Draft)  
 **Status:** Working Draft  
-**Supersedes:** None  
+**Supersedes:** 0.1.0  
 **Layer:** Profile  
 
 ## 1. Introduction
@@ -91,7 +91,7 @@ trust_score = base(100) - depth_penalty - age_penalty - stale_penalty - unknown_
 trust_score = max(0, min(100, trust_score))
 ```
 
-Revoked ancestor and unknown issuer are hard chain-validity gates checked before `trust_score` is computed (see Spec 02 §3.3, Spec 01 §3.1) — a hit means a hard `DENY`, not a soft point deduction. Stale revocation list does not apply where there is no revocation list with a staleness concept (see Spec 05). A separate, application-layer behavioral reputation penalty (0 to −25, based on the agent's recent decision history) MAY be applied on top of this structural formula.
+Revoked ancestor and unknown issuer are hard chain-validity gates checked before `trust_score` is computed (see Spec 02 §3.3, Spec 01 §3.1) — a hit means a hard `DENY`, not a soft point deduction. Stale revocation list does not apply where there is no revocation list with a staleness concept (see Spec 05). A separate, application-layer behavioral reputation penalty (0 to −25, based on the agent's recent decision history) is applied on top of this structural formula.
 
 ## 3. Risk Combination
 
@@ -252,3 +252,4 @@ Final Risk                 = 85 + 25.55 = 110.55 → capped at 100
 | Version | Date | Changes |
 |---------|------|---------|
 | 0.1.0 | 2026-07-12 | Initial public working draft |
+| 0.1.1 | 2026-08-04 | §2.3 risk-formula note: behavioral reputation penalty changed from "MAY be applied" to "is applied," describing actual behavior rather than an optional extension |
