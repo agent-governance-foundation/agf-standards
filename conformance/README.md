@@ -14,6 +14,8 @@ The full suite is not yet published; Spec 11 describes the target. Until the sui
 
 **First published artifacts:** the AAP-Core kernel schemas and fixtures in [schemas/kernel/](../schemas/kernel/) — six JSON Schemas for the kernel objects (Spec 00 §3) with valid/invalid example documents and a runnable checker (`python3 schemas/kernel/check.py`, exercised in CI). The kernel negative vectors (Spec 00 §6, Spec 11 §3.11) are defined normatively; the schema-checkable ones ship as fixtures there, and the behavioral ones (expired delegation, revoked parent grant) will land with the runnable harness.
 
+**Worked examples:** [scenarios/revocation-race-window/](scenarios/revocation-race-window/) is a full synthetic trace (delegation chain, revocation, decision, execution and settlement/reconciliation artifacts) illustrating one of the not-yet-automated behavioral vectors — a revocation that becomes effective between decision and execution but is only observed afterward (KERNEL-NEG-04-adjacent). It is prose analysis, not a runnable fixture; useful for readers reasoning about what AGF's signed artifacts do and don't prove.
+
 ## Trademark note
 
 Implementing the specifications is free and requires no permission (see [LICENSE](../LICENSE)). Using AGF conformance marks in marketing is contingent on passing the published suite once it exists — this is how the ecosystem keeps "conformant" meaningful.

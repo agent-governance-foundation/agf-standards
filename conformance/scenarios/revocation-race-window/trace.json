@@ -1,0 +1,142 @@
+{
+  "case_id": "case-agf-synth-0001",
+  "case_id_note": "case_id is a convenience label added for this worked example, NOT a native AGF field. The real correlation chain is reconstructed from the reference fields inside each artifact below (see narrative.md, section 'Correlation: real FK vs reconstructed').",
+
+  "delegation_chain": {
+    "hop0_root_mandate": {
+      "_kind": "delegation JWT payload (decoded; Spec 02 authority object) — unsigned in this synthetic trace",
+      "iss": "did:agf:acme:alice",
+      "sub": "did:agf:acme:agent:payment-orchestrator",
+      "aud": "https://pdp.acme.com",
+      "iat": 1785848400,
+      "exp": 1788444000,
+      "jti": "del_root_7a91f3",
+      "scope": ["initiate:payment", "read:account-balance", "read:vendor-directory"],
+      "max_depth": 3,
+      "constraints": {}
+    },
+    "hop1_A_to_B": {
+      "_kind": "delegation JWT payload (decoded) — attenuation: scope narrowed from 3 actions to 1",
+      "iss": "did:agf:acme:agent:payment-orchestrator",
+      "sub": "did:agf:acme:agent:payment-executor",
+      "aud": "https://pdp.acme.com",
+      "iat": 1785848400,
+      "exp": 1787061600,
+      "jti": "del_hop1_c204be",
+      "parent": "del_root_7a91f3",
+      "scope": ["initiate:payment"],
+      "max_depth": 2,
+      "constraints": {}
+    },
+    "hop2_B_to_C": {
+      "_kind": "delegation JWT payload (decoded) — attenuation: same action, added value/target constraints",
+      "iss": "did:agf:acme:agent:payment-executor",
+      "sub": "did:agf:acme:agent:payment-gateway-adapter",
+      "aud": "https://pdp.acme.com",
+      "iat": 1785848400,
+      "exp": 1786456800,
+      "jti": "del_hop2_9e5b71",
+      "parent": "del_hop1_c204be",
+      "scope": ["initiate:payment"],
+      "max_depth": 1,
+      "constraints": {
+        "max_amount": { "currency": "USD", "value": 5000 },
+        "target_account_prefix": "acct_vendor_"
+      }
+    }
+  },
+
+  "revocation_record": {
+    "_kind": "kernel invalidation.schema.json shape (Spec 05 branch-cut / Spec 28 propagation)",
+    "subject": "del_hop1_c204be",
+    "subject_type": "authority",
+    "cause": "revoked",
+    "revocation_issued_at": 1785852001,
+    "revocation_effective_at": 1785852001,
+    "revocation_observed_at": 1785852033,
+    "actor": "did:agf:acme:alice",
+    "evidence": {
+      "reason_category": "policy_change",
+      "reason": "vendor payment authority narrowed after incident review; del_hop1_c204be revoked directly. Under branch-cut semantics (Spec 05 §3), del_hop2_9e5b71 is invalidated as a descendant even though it is not itself named as a revocation subject."
+    },
+    "note_on_issued_vs_effective": "AGF's branch-cut model treats a revocation as effective at the instant it is recorded (Spec 28 §4.3, single-instance deployment — no propagation delay to the index). issued_at and effective_at are therefore the same instant here; the real gap in this deployment model is issued/effective vs. observed (i.e. occurred_at vs. detected_at in the kernel schema), not issued vs. effective.",
+    "note_on_detected_at_persistence": "detected_at is a real, persisted field in the reference runtime for every revocation backend. For live-Postgres-backed deployments (postgres / postgres+notify), detected_at is written in the same transaction as revoked_at — there is no lag, ever, by architecture. The 32-second revocation_effective_at-to-revocation_observed_at gap this trace depicts is only realistic for a file/cached-revocation-list-backed deployment, which is the topology this scenario should be read as modeling. This does not change the separate, still-true finding that AGF performs exactly one authority check per decision with no re-validation at the instant of execution — detected_at is about when a revocation was first observed, not about re-checking authority at execution time."
+  },
+
+  "decision_receipt": {
+    "_kind": "kernel decision.schema.json shape (POST /v1/decide result, signed audit artifact)",
+    "id": "dec_1785852000_b7f2a1",
+    "status": "ALLOW",
+    "qualifiers": [],
+    "action": {
+      "type": "initiate:payment",
+      "target": "payments/acct_vendor_4471/push"
+    },
+    "authority_refs": ["del_root_7a91f3", "del_hop1_c204be", "del_hop2_9e5b71"],
+    "policy": {
+      "version": "acme/policies/payments/initiate@2.1.0",
+      "hash": "f3c9a1"
+    },
+    "decider": "did:agf:acme:pdp-01",
+    "decided_at": 1785852000,
+    "reasons": ["valid_delegation_chain", "risk_below_threshold", "scope_matched"],
+    "note": "Correct decision at decided_at: the revocation had not yet been issued (revocation_issued_at=1785852001 > decided_at=1785852000). This is not a stale-cache bug — the chain was genuinely valid at evaluation time."
+  },
+
+  "execution_receipt": {
+    "_kind": "kernel receipt.schema.json shape + runtime fields (gateway/signature_version/algorithm/upstream_status/org_id)",
+    "id": "rcpt_1785852002_e41d09",
+    "decision_ref": "dec_1785852000_b7f2a1",
+    "execution_attempted_at": 1785852002,
+    "attempted": true,
+    "outcome": "executed",
+    "completed_at": 1785852003,
+    "signer": "did:agf:acme:gateway-01",
+    "signature": "<omitted — synthetic trace, no real ES256 signature>",
+    "gateway": "http",
+    "signature_version": 1,
+    "algorithm": "ES256",
+    "upstream_status": "accepted",
+    "org_id": "acme",
+    "note": "execution_attempted_at is a gateway-local dispatch timestamp, not a field on the signed kernel receipt itself (the kernel schema only signs completed_at, i.e. when the outcome was known). Flagging this because it matters for the proof/inference matrix: the moment of dispatch is evidenced by infra logs, not by the cryptographically signed artifact."
+  },
+
+  "settlement_record": {
+    "_kind": "synthetic — not an AGF-native concept; AGF has no payment-rail model. Rail-neutral account push, 3-state (accepted/settled/reconciled) settlement model.",
+    "settlement_id": "stl_a8c920",
+    "execution_receipt_ref": "rcpt_1785852002_e41d09",
+    "decision_ref": "dec_1785852000_b7f2a1",
+    "rail": "generic_account_push",
+    "amount": { "value": 4200.00, "currency": "USD" },
+    "from_account": "acct_org_treasury_001",
+    "to_account": "acct_vendor_4471",
+    "states": [
+      { "state": "accepted", "at": 1785852003 },
+      { "state": "settled", "at": 1785852047 }
+    ],
+    "final_state": "settled"
+  },
+
+  "reconciliation_exception": {
+    "_kind": "synthetic — post-execution reconciliation job cross-checking settled payments against the revocation index",
+    "reconciliation_id": "rcn_7f0e5c",
+    "settlement_ref": "stl_a8c920",
+    "execution_receipt_ref": "rcpt_1785852002_e41d09",
+    "decision_ref": "dec_1785852000_b7f2a1",
+    "revocation_ref": "del_hop1_c204be",
+    "trigger": "post_settlement_authority_audit",
+    "reconciliation_opened_at": 1785852347,
+    "finding": {
+      "authority_valid_at_decided_at": true,
+      "authority_effective_at_execution_attempted_at": false,
+      "revocation_effective_at": 1785852001,
+      "revocation_observed_at": 1785852033,
+      "execution_attempted_at": 1785852002,
+      "gap_effective_to_attempted_seconds": 1,
+      "gap_attempted_to_observed_seconds": 31
+    },
+    "exception_reason": "authority_disputed_at_execution",
+    "state": "open",
+    "closed_at": null
+  }
+}
