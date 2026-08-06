@@ -3,6 +3,7 @@
   "case_id_note": "case_id is a convenience label added for this worked example, NOT a native AGF field. The real correlation chain is reconstructed from the reference fields inside each artifact below (see narrative.md, section 'Correlation: real FK vs reconstructed').",
 
   "delegation_chain": {
+    "_depth_validation_note": "Spec 02 §3.6/§6: max_depth is a static ceiling checked as len(chain)-1 <= min(max_depth across all tokens). This chain has 3 tokens → len-1=2 → all tokens require max_depth >= 2. Values (3,2,2) satisfy this bound; hop1's attenuation is carried by scope/constraints, not by reducing max_depth.",
     "hop0_root_mandate": {
       "_kind": "delegation JWT payload (decoded; Spec 02 authority object) — unsigned in this synthetic trace",
       "iss": "did:agf:acme:alice",
@@ -38,7 +39,7 @@
       "jti": "del_hop2_9e5b71",
       "parent": "del_hop1_c204be",
       "scope": ["initiate:payment"],
-      "max_depth": 1,
+      "max_depth": 2,
       "constraints": {
         "max_amount": { "currency": "USD", "value": 5000 },
         "target_account_prefix": "acct_vendor_"
@@ -54,7 +55,15 @@
     "revocation_issued_at": 1785852001,
     "revocation_effective_at": 1785852001,
     "revocation_observed_at": 1785852033,
+    "deployment_topology": "file_or_cached_revocation_list",
+    "deployment_topology_note": "This scenario's revocation_effective_at→revocation_observed_at gap models a file/cached-revocation-list-backed deployment only. Under a live-Postgres-backed deployment (postgres / postgres+notify), detected_at is written in the same transaction as revoked_at and this gap would be zero — see Spec 28 §4.3.",
     "actor": "did:agf:acme:alice",
+    "_actor_authorization_note": "Provenance only: the specs (Spec 02, Spec 05 §4.3, Spec 00 §3.6) require an actor/revoked_by DID but do not currently define who is authorized to revoke a given authority. This is a genuine spec gap, not something this trace resolves.",
+    "_kernel_field_mapping": {
+      "revocation_effective_at": "occurred_at",
+      "revocation_observed_at": "detected_at",
+      "note": "Existing field names are kept here for readability; this maps them to invalidation.schema.json's native field names."
+    },
     "evidence": {
       "reason_category": "policy_change",
       "reason": "vendor payment authority narrowed after incident review; del_hop1_c204be revoked directly. Under branch-cut semantics (Spec 05 §3), del_hop2_9e5b71 is invalidated as a descendant even though it is not itself named as a revocation subject."
@@ -64,30 +73,47 @@
   },
 
   "decision_receipt": {
-    "_kind": "kernel decision.schema.json shape (POST /v1/decide result, signed audit artifact)",
+    "_kind": "kernel decision.schema.json shape — signature omitted (synthetic trace)",
     "id": "dec_1785852000_b7f2a1",
     "status": "ALLOW",
     "qualifiers": [],
     "action": {
       "type": "initiate:payment",
-      "target": "payments/acct_vendor_4471/push"
+      "target": "payments/acct_vendor_4471/push",
+      "request_ref": "req_synth_9c31e0",
+      "request_ref_note": "Correlation identifier only; does not provide cryptographic evidence binding."
     },
     "authority_refs": ["del_root_7a91f3", "del_hop1_c204be", "del_hop2_9e5b71"],
     "policy": {
       "version": "acme/policies/payments/initiate@2.1.0",
-      "hash": "f3c9a1"
+      "hash": "f3c9a1",
+      "note": "hash and constraint evaluation (e.g. max_amount) are illustrative-only, not tied to a specified evaluator or hash algorithm."
     },
     "decider": "did:agf:acme:pdp-01",
+    "signature_status": "omitted_synthetic",
     "decided_at": 1785852000,
     "reasons": ["valid_delegation_chain", "risk_below_threshold", "scope_matched"],
     "note": "Correct decision at decided_at: the revocation had not yet been issued (revocation_issued_at=1785852001 > decided_at=1785852000). This is not a stale-cache bug — the chain was genuinely valid at evaluation time."
   },
 
   "execution_receipt": {
-    "_kind": "kernel receipt.schema.json shape + runtime fields (gateway/signature_version/algorithm/upstream_status/org_id)",
+    "_kind": "kernel receipt.schema.json shape + runtime fields",
+    "_field_classification": {
+      "kernel": { "fields": ["id", "decision_ref", "attempted", "outcome", "completed_at", "signer", "signature"] },
+      "wire_spec07": { "fields": ["gateway", "signature_version", "algorithm"], "note": "Spec 07 §10.1 receipt wire fields." },
+      "wire_spec07_unsigned": { "fields": ["upstream_status"], "note": "Defined by Spec 07 §10.1 but explicitly outside the signed payload per §10.2 — operational detail, never invalidates a receipt." },
+      "non_native_or_extension": {
+        "fields": ["dispatch_log_ref"],
+        "org_id": { "classification": "non_native_or_extension", "note": "Spec 07 §5.3 defines org_id only as a Decision storage-path segment, not a field on the execution_receipt wire object." }
+      }
+    },
     "id": "rcpt_1785852002_e41d09",
     "decision_ref": "dec_1785852000_b7f2a1",
+    "request_ref": "req_synth_9c31e0",
+    "request_ref_note": "Correlation identifier only; does not provide cryptographic evidence binding.",
     "execution_attempted_at": 1785852002,
+    "dispatch_log_ref": null,
+    "dispatch_log_ref_note": "No gateway dispatch log supplied in this synthetic trace; execution_attempted_at is asserted, not log-evidenced, here.",
     "attempted": true,
     "outcome": "executed",
     "completed_at": 1785852003,
@@ -98,6 +124,7 @@
     "algorithm": "ES256",
     "upstream_status": "accepted",
     "org_id": "acme",
+    "propagation_window_clarification": "Spec 05 §5.5 governs a new decision evaluation during/after the propagation window; this scenario models the dispatch of an already-issued decision without a second authority evaluation. This is a scenario about the gap between decision-time and execution-time authority, not a claim that AGF permits dispatch after revocation.",
     "note": "execution_attempted_at is a gateway-local dispatch timestamp, not a field on the signed kernel receipt itself (the kernel schema only signs completed_at, i.e. when the outcome was known). Flagging this because it matters for the proof/inference matrix: the moment of dispatch is evidenced by infra logs, not by the cryptographically signed artifact."
   },
 
@@ -106,10 +133,13 @@
     "settlement_id": "stl_a8c920",
     "execution_receipt_ref": "rcpt_1785852002_e41d09",
     "decision_ref": "dec_1785852000_b7f2a1",
+    "request_ref": "req_synth_9c31e0",
+    "request_ref_note": "Correlation identifier only; does not provide cryptographic evidence binding.",
     "rail": "generic_account_push",
     "amount": { "value": 4200.00, "currency": "USD" },
     "from_account": "acct_org_treasury_001",
     "to_account": "acct_vendor_4471",
+    "beneficiary_note": "Beneficiary identity is out of scope for this example and is not distinguished from to_account; AGF has no native beneficiary concept.",
     "states": [
       { "state": "accepted", "at": 1785852003 },
       { "state": "settled", "at": 1785852047 }
@@ -123,7 +153,8 @@
     "settlement_ref": "stl_a8c920",
     "execution_receipt_ref": "rcpt_1785852002_e41d09",
     "decision_ref": "dec_1785852000_b7f2a1",
-    "revocation_ref": "del_hop1_c204be",
+    "revoked_authority_ref": "del_hop1_c204be",
+    "revoked_authority_ref_note": "Points at the revoked authority's jti; revocation_record has no id field of its own to reference instead.",
     "trigger": "post_settlement_authority_audit",
     "reconciliation_opened_at": 1785852347,
     "finding": {
@@ -137,6 +168,7 @@
     },
     "exception_reason": "authority_disputed_at_execution",
     "state": "open",
-    "closed_at": null
+    "closed_at": null,
+    "scope_note": "Intentionally terminal at exception-opening; SLA/ownership/closure lifecycle is out of scope — this scenario is about the revocation race window, not reconciliation process design."
   }
 }

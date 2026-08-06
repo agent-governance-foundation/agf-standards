@@ -40,6 +40,16 @@ convention in [`schemas/kernel/fixtures/`](../../../schemas/kernel/fixtures/).
 Chain lineage is `hop2.parent == hop1.jti`, `hop1.parent == hop0.jti` — the
 real AGF linkage mechanism (Spec 02), independent of the `case_id` label.
 
+### Depth validation
+
+Per Spec 02 §3.6/§6, validity requires `len(chain)-1 <= min(max_depth
+across all tokens)`. This chain has 3 tokens (`len-1 == 2`), so every token
+must carry `max_depth >= 2`. `max_depth` is a static ceiling checked
+against the chain's actual depth-from-root — it is not a decrementing
+remaining-hops counter. The chain's values are `(3, 2, 2)`; hop1's
+attenuation is carried by `scope`/`constraints` narrowing, not by reducing
+`max_depth`.
+
 ## Timeline
 
 | Event | Field | Timestamp | Offset |
@@ -57,10 +67,22 @@ execution_attempted_at < revocation_observed_at`. The decision was correct
 when made — the chain was fully valid at `decided_at`. Authority ended one
 second later. The gateway, unaware, dispatched the request a second after
 that. The runtime didn't learn about the revocation until 31 seconds after
-the request had already gone out. Nothing in the pipeline was wrong in
-isolation; the composition produces a window where a signed ALLOW decision
-and the authority it attests to have already diverged by the time it's
+the request had already gone out. The scenario intentionally composes
+individually defined behaviors to expose a window where an ALLOW decision
+artifact and the authority it represents have diverged by the time it is
 acted on.
+
+Spec 05 §5.5 governs a new decision evaluation during/after the propagation
+window; this scenario models the dispatch of an already-issued decision
+without a second authority evaluation. This is a scenario about the gap
+between decision-time and execution-time authority, not a claim that AGF
+permits dispatch after revocation.
+
+"ALLOW decision artifact" above describes artifact *structure*
+(`decision.schema.json` shape), not a cryptographic guarantee — this
+synthetic trace omits real signatures throughout (see `signature_status:
+"omitted_synthetic"` on `decision_receipt` and the placeholder `signature`
+on `execution_receipt`).
 
 ## Correlation: real FK vs reconstructed
 
@@ -97,9 +119,9 @@ this was originally drafted, `effective_at`/`observed_at` (`occurred_at`/
 `detected_at` in the kernel schema) was a real field in
 `invalidation.schema.json` but **not actually persisted anywhere in the
 reference runtime** — the two-timestamp gap existed only in the spec, not in
-running code. That gap has since been closed: `detected_at` is now a real,
-persisted field on every revocation record, for every backend. But closing
-it surfaced a fact worth being precise about, because it changes which
+running code. That gap has since been closed: `detected_at` is now
+persisted by the implementation and represented in the decision evidence.
+But closing it surfaced a fact worth being precise about, because it changes which
 backend this trace's own scenario is realistic for:
 
 - For a live-Postgres-backed deployment (`postgres` or `postgres+notify`),
@@ -131,6 +153,10 @@ backend this trace's own scenario is realistic for:
   only had the decision and execution receipt in hand, you could not tell
   the authority was later disputed; you'd need the revocation record and
   the reconciliation job's cross-check to surface it.
+- This example is intentionally terminal at exception-opening
+  (`reconciliation_exception.state == "open"`, `closed_at: null`).
+  SLA/ownership/closure lifecycle is out of scope — this scenario is about
+  the revocation race window, not reconciliation process design.
 
 ## Files
 
