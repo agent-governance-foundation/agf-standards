@@ -58,7 +58,7 @@
     "deployment_topology": "file_or_cached_revocation_list",
     "deployment_topology_note": "This scenario's revocation_effective_at→revocation_observed_at gap models a file/cached-revocation-list-backed deployment only. Under a live-Postgres-backed deployment (postgres / postgres+notify), detected_at is written in the same transaction as revoked_at and this gap would be zero — see Spec 28 §4.3.",
     "actor": "did:agf:acme:alice",
-    "_actor_authorization_note": "Provenance only: the specs (Spec 02, Spec 05 §4.3, Spec 00 §3.6) require an actor/revoked_by DID but do not currently define who is authorized to revoke a given authority. This is a genuine spec gap, not something this trace resolves.",
+    "_actor_authorization_note": "Provenance only: the specs (Spec 02, Spec 05 §4.3, Spec 00 §3.6) require an actor/revoked_by DID but do not currently define who is authorized to revoke a given authority. This is a genuine spec gap, not something this trace resolves. A draft RFC (0000-revocation-authorization, agf-standards/rfcs/) proposes a grantor-or-ancestor rule for this — status Draft, not adopted, so it does not currently govern whether `did:agf:acme:alice` (root grantor, not del_hop1_c204be's direct issuer) was authorized to revoke del_hop1_c204be here; under that RFC's own proposed rule, alice would qualify as an ancestor. A candidate agf-runtime enforcement of that proposed rule exists (RR-0002, agf-profile/implementation/review-records/ — status Pending) but implements a runtime-specific actor-to-delegation binding the RFC deliberately leaves unresolved at the spec level, so it is cited here as an existing implementation data point, not as evidence the spec question is settled.",
     "_kernel_field_mapping": {
       "revocation_effective_at": "occurred_at",
       "revocation_observed_at": "detected_at",
@@ -81,7 +81,9 @@
       "type": "initiate:payment",
       "target": "payments/acct_vendor_4471/push",
       "request_ref": "req_synth_9c31e0",
-      "request_ref_note": "Correlation identifier only; does not provide cryptographic evidence binding."
+      "request_ref_note": "Correlation identifier only; does not provide cryptographic evidence binding.",
+      "request_hash": "cad95970d2b07741ebdcf00d06a002854b19154406e387cad061ab23de460a64",
+      "request_hash_note": "SHA-256 hex digest over this worked example's own canonical JSON encoding of {action_target, amount, from_account, scope, to_account} — keys sorted, no whitespace; see narrative.md 'Payload identity' section for the exact canonical byte string and how to recompute it. This is this worked example's own illustrative convention for demonstrating what payload-identity binding across decision/execution/settlement would look like. AGF does not currently specify a canonical request/payload hashing method, field set, or canonicalization rule — compare policy.hash below, which has the same illustrative-only status. The same value is carried on execution_receipt, settlement_record, and reconciliation_exception below; a mismatch there would mean the records describe different payloads, which is the property this field exists to let a reviewer check — something request_ref alone cannot do."
     },
     "authority_refs": ["del_root_7a91f3", "del_hop1_c204be", "del_hop2_9e5b71"],
     "policy": {
@@ -103,7 +105,7 @@
       "wire_spec07": { "fields": ["gateway", "signature_version", "algorithm"], "note": "Spec 07 §10.1 receipt wire fields." },
       "wire_spec07_unsigned": { "fields": ["upstream_status"], "note": "Defined by Spec 07 §10.1 but explicitly outside the signed payload per §10.2 — operational detail, never invalidates a receipt." },
       "non_native_or_extension": {
-        "fields": ["dispatch_log_ref"],
+        "fields": ["dispatch_log_ref", "request_hash", "upstream_event_ref"],
         "org_id": { "classification": "non_native_or_extension", "note": "Spec 07 §5.3 defines org_id only as a Decision storage-path segment, not a field on the execution_receipt wire object." }
       }
     },
@@ -111,6 +113,8 @@
     "decision_ref": "dec_1785852000_b7f2a1",
     "request_ref": "req_synth_9c31e0",
     "request_ref_note": "Correlation identifier only; does not provide cryptographic evidence binding.",
+    "request_hash": "cad95970d2b07741ebdcf00d06a002854b19154406e387cad061ab23de460a64",
+    "request_hash_note": "Same value and convention as decision_receipt.action.request_hash — matching here is what establishes this receipt describes the same payload the decision authorized, not just a shared correlation string.",
     "execution_attempted_at": 1785852002,
     "dispatch_log_ref": null,
     "dispatch_log_ref_note": "No gateway dispatch log supplied in this synthetic trace; execution_attempted_at is asserted, not log-evidenced, here.",
@@ -123,8 +127,11 @@
     "signature_version": 1,
     "algorithm": "ES256",
     "upstream_status": "accepted",
+    "upstream_event_ref": "upe_5b2f1a",
+    "upstream_event_ref_note": "Synthetic correlation only, this worked example's own convention — not an AGF or Spec 07 field. Ties this receipt's upstream_status to settlement_record.states[0] (the 'accepted' entry) as the same upstream acceptance event, since nothing native links execution acceptance to settlement acceptance otherwise.",
     "org_id": "acme",
     "propagation_window_clarification": "Spec 05 §5.5 governs a new decision evaluation during/after the propagation window; this scenario models the dispatch of an already-issued decision without a second authority evaluation. This is a scenario about the gap between decision-time and execution-time authority, not a claim that AGF permits dispatch after revocation.",
+    "propagation_window_runtime_evidence": "The 'no second authority evaluation between decision and dispatch' claim above is verified against the current agf-runtime reference implementation, not merely asserted: perform_decision() (src/presentation/api/routes/decide.py:115) is called exactly once per request by /v1/decide (decide.py:996) and by each of the three gateway-proxy routes (http_gateway_proxy.py:141, mcp_gateway_proxy.py:123, a2a_gateway_proxy.py:151) — no second or independent revalidation call exists anywhere in that codebase as of this note. This is cited as reference-implementation behavior, not as normative specification text: no AGF spec currently states single-check decision semantics as a requirement (a draft RFC, 0000-single-check-decision-semantics, proposes formalizing this — status Draft, not adopted). Two implementations could in principle diverge on this point while both remaining silent-conformant.",
     "note": "execution_attempted_at is a gateway-local dispatch timestamp, not a field on the signed kernel receipt itself (the kernel schema only signs completed_at, i.e. when the outcome was known). Flagging this because it matters for the proof/inference matrix: the moment of dispatch is evidenced by infra logs, not by the cryptographically signed artifact."
   },
 
@@ -135,11 +142,15 @@
     "decision_ref": "dec_1785852000_b7f2a1",
     "request_ref": "req_synth_9c31e0",
     "request_ref_note": "Correlation identifier only; does not provide cryptographic evidence binding.",
+    "request_hash": "cad95970d2b07741ebdcf00d06a002854b19154406e387cad061ab23de460a64",
+    "request_hash_note": "Same value and convention as decision_receipt.action.request_hash — the amount/from_account/to_account/target fields below are exactly what that hash was computed over, so this record's payload identity is independently checkable against the decision, not merely asserted by re-listing the same numbers.",
     "rail": "generic_account_push",
     "amount": { "value": 4200.00, "currency": "USD" },
     "from_account": "acct_org_treasury_001",
     "to_account": "acct_vendor_4471",
     "beneficiary_note": "Beneficiary identity is out of scope for this example and is not distinguished from to_account; AGF has no native beneficiary concept.",
+    "upstream_event_ref": "upe_5b2f1a",
+    "upstream_event_ref_note": "Synthetic correlation only — see execution_receipt.upstream_event_ref_note. Ties states[0] below to the execution receipt's upstream_status as the same upstream acceptance event.",
     "states": [
       { "state": "accepted", "at": 1785852003 },
       { "state": "settled", "at": 1785852047 }
@@ -155,6 +166,8 @@
     "decision_ref": "dec_1785852000_b7f2a1",
     "revoked_authority_ref": "del_hop1_c204be",
     "revoked_authority_ref_note": "Points at the revoked authority's jti; revocation_record has no id field of its own to reference instead.",
+    "request_hash": "cad95970d2b07741ebdcf00d06a002854b19154406e387cad061ab23de460a64",
+    "request_hash_note": "Same value and convention as decision_receipt.action.request_hash — carried here so the reconciliation job's cross-check is itself checkable against the same payload identity, not just against the chain of *_ref pointers.",
     "trigger": "post_settlement_authority_audit",
     "reconciliation_opened_at": 1785852347,
     "finding": {

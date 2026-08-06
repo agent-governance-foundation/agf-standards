@@ -76,7 +76,10 @@ Spec 05 §5.5 governs a new decision evaluation during/after the propagation
 window; this scenario models the dispatch of an already-issued decision
 without a second authority evaluation. This is a scenario about the gap
 between decision-time and execution-time authority, not a claim that AGF
-permits dispatch after revocation.
+permits dispatch after revocation. See "Correlation: real FK vs
+reconstructed" below for the reference-implementation citation backing the
+"no second authority evaluation" claim, and its caveat: that's verified
+runtime behavior, not yet adopted normative spec text.
 
 "ALLOW decision artifact" above describes artifact *structure*
 (`decision.schema.json` shape), not a cryptographic guarantee — this
@@ -94,6 +97,11 @@ front rather than waiting for you to find it:
 - `settlement_record.execution_receipt_ref` → `execution_receipt.id`
 - `reconciliation_exception.{settlement_ref, execution_receipt_ref, decision_ref}`
 - `hop2.parent` → `hop1.jti`, `hop1.parent` → `hop0.jti`
+- `execution_receipt.upstream_event_ref` = `settlement_record.upstream_event_ref` —
+  an explicit shared pointer tying execution acceptance to settlement's first
+  `states[0]` entry as the same upstream event. Synthetic and non-native (this
+  worked example's own convention, not an AGF or Spec 07 field), but an
+  explicit stored match now, not same-second-timing inference.
 
 **Not backed by a stored reference — reconstructed by matching values across
 records:**
@@ -145,6 +153,20 @@ backend this trace's own scenario is realistic for:
   separate "was authority still valid at the instant of execution" gap
   this trace's core timeline is built around. Those remain two different
   claims — closing one didn't close the other.
+  This "exactly one check, no re-check" claim is verified against the
+  current `agf-runtime` reference implementation, not merely asserted:
+  `perform_decision()` (`src/presentation/api/routes/decide.py:115`) is
+  called exactly once per request by `/v1/decide` (`decide.py:996`) and by
+  each of the three gateway-proxy routes (`http_gateway_proxy.py:141`,
+  `mcp_gateway_proxy.py:123`, `a2a_gateway_proxy.py:151`) — no second or
+  independent revalidation call exists anywhere in that codebase as of this
+  writing. That said, this is reference-implementation behavior, not
+  normative specification text: no AGF spec currently states single-check
+  decision semantics as a requirement. A draft RFC,
+  `0000-single-check-decision-semantics` (`agf-standards/rfcs/`, status
+  **Draft**), proposes formalizing exactly this — until it's adopted, two
+  conformant implementations could in principle diverge on this point while
+  both remaining spec-silent-compliant.
 
 **Missing entirely:**
 - Nothing in the AGF-native artifacts (decision, execution receipt) records
@@ -157,6 +179,49 @@ backend this trace's own scenario is realistic for:
   (`reconciliation_exception.state == "open"`, `closed_at: null`).
   SLA/ownership/closure lifecycle is out of scope — this scenario is about
   the revocation race window, not reconciliation process design.
+- Who is authorized to revoke `del_hop1_c204be` — the specs (Spec 02, Spec 05
+  §4.3, Spec 00 §3.6) require a `revoked_by`/`actor` DID on a revocation but
+  do not currently define whose DID may legitimately hold that role. A draft
+  RFC, `0000-revocation-authorization` (`agf-standards/rfcs/`, status
+  **Draft**), proposes a grantor-or-ancestor rule under which `alice` — the
+  chain's root grantor, not `del_hop1_c204be`'s direct issuer — would qualify
+  as an authorized ancestor; a candidate `agf-runtime` enforcement of that
+  proposed rule exists (`RR-0002`,
+  `agf-profile/implementation/review-records/`, status **Pending**). Neither
+  is adopted, so `revocation_record.actor` in this trace is not currently
+  backed by any settled specification rule — this is cited as the relevant
+  in-flight work, not as evidence the gap is closed.
+- What canonicalization/hashing rule governs `constraints.max_amount`,
+  `target_account_prefix`, and `policy.hash` reproducibility — no RFC
+  currently addresses this (unlike the two gaps above, which at least have
+  Draft proposals); `trace.json`'s `policy.note` continues to label this
+  illustrative-only rather than implying a rule exists.
+
+## Payload identity (`request_hash`)
+
+`decision_receipt.action.request_hash`, `execution_receipt.request_hash`,
+`settlement_record.request_hash`, and `reconciliation_exception.request_hash`
+all carry the same value:
+`cad95970d2b07741ebdcf00d06a002854b19154406e387cad061ab23de460a64`. Unlike
+`request_ref` (a bare correlation string), this is an actual SHA-256 digest,
+computed over this worked example's own canonical JSON encoding of the
+payload fields that matter for identity — `action_target`, `amount`,
+`from_account`, `scope`, `to_account` — with object keys sorted and no
+whitespace:
+
+```
+{"action_target":"payments/acct_vendor_4471/push","amount":{"currency":"USD","value":4200.0},"from_account":"acct_org_treasury_001","scope":["initiate:payment"],"to_account":"acct_vendor_4471"}
+```
+
+A reviewer can recompute this independently (e.g. Python:
+`hashlib.sha256(canonical_bytes.encode()).hexdigest()`) and confirm all four
+records agree — that agreement is what establishes, rather than merely
+asserts, that the decision, the execution, the settlement, and the
+reconciliation cross-check all describe the *same* payload. This is this
+worked example's own illustrative convention, not an AGF-specified hashing
+method, field set, or canonicalization rule — no AGF spec currently defines
+one (see `policy.hash`'s note in `trace.json`, which is the same kind of
+illustrative-only field for a different reason).
 
 ## Files
 
