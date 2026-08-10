@@ -1,8 +1,8 @@
 # Specification 02: Delegation Chain Semantics
 
-**Version:** 0.2.0 (Draft)  
+**Version:** 0.3.0 (Draft)  
 **Status:** Working Draft  
-**Supersedes:** 0.1.0  
+**Supersedes:** 0.2.0  
 **Layer:** Core format  
 
 ## 1. Introduction
@@ -98,7 +98,7 @@ This is an intentional architectural constraint, not a limitation. It means: if 
 
 ### 3.6 Depth Limits
 
-If any token contains a `max_depth` claim, the chain length (number of tokens) MUST NOT exceed `min(max_depth_i) + 1` (the first token counts as depth 0). When no token in the chain claims `max_depth`, the implicit ceiling is the default depth limit below, aligned with Spec 03 §4.2's Domain zone requirement (full-chain tracking up to depth 10).
+If any token contains a `max_depth` claim, the chain length (number of tokens) MUST NOT exceed `min(max_depth_i) + 1` (the first token counts as depth 0). `min(max_depth_i)` ranges only over tokens that explicitly carry a `max_depth` claim. If no token carries an explicit `max_depth` claim, the effective maximum depth is the default depth limit below, aligned with Spec 03 §4.2's Domain zone requirement (full-chain tracking up to depth 10). See §6 for the exact binding-limit computation.
 
 **Operational depth limits:**
 
@@ -195,6 +195,7 @@ The current implementation splits this across two layers: a pure `validate_chain
 # Layer 1: structural validation (pure — no I/O beyond key resolution)
 def validate_chain(chain, action, audience, key_resolver, current_time):
     effective_scope = None
+    explicit_max_depths = []  # (token index, claimed max_depth) — only tokens that supply one
 
     if len(chain) > HARD_DEPTH_LIMIT:
         return error("MAX_DEPTH_EXCEEDED")
@@ -207,15 +208,28 @@ def validate_chain(chain, action, audience, key_resolver, current_time):
             return error(result.error.code, i)
         payload = result.payload
 
-        # 2. Check depth limit (defaults to 10 if the token omits max_depth —
-        #    reconciled with Spec 03 §4.2's Domain zone requirement)
-        max_depth = payload.get("max_depth", DEFAULT_MAX_DEPTH)
-        if len(chain) - 1 > max_depth:
-            return error("DEPTH_EXCEEDED", i)
+        # 2. Collect this token's explicit max_depth claim, if any. A token
+        #    that omits the claim contributes no value to the binding
+        #    minimum below — it is not treated as an implicit
+        #    DEFAULT_MAX_DEPTH claim.
+        claimed = payload.get("max_depth")
+        if claimed is not None:
+            explicit_max_depths.append((i, claimed))
 
         # 3. Update effective scope (with canonicalization)
         token_scope = set(canonicalize(s) for s in payload.scope)
         effective_scope = token_scope if effective_scope is None else effective_scope & token_scope
+
+    # 3b. Binding depth limit is the smallest explicit max_depth anywhere in
+    #     the chain. DEFAULT_MAX_DEPTH is used only when no token in the
+    #     chain supplies an explicit max_depth claim.
+    if explicit_max_depths:
+        binding_index, effective_max_depth = min(explicit_max_depths, key=lambda pair: pair[1])
+    else:
+        binding_index, effective_max_depth = None, DEFAULT_MAX_DEPTH
+
+    if len(chain) - 1 > effective_max_depth:
+        return error("DEPTH_EXCEEDED", binding_index)
 
     # 4. Check continuity across the whole chain
     if not continuous(chain):
@@ -288,3 +302,4 @@ Implementations MUST monitor validation time and alert if approaching limits. Co
 |---------|------|---------|
 | 0.1.0 | 2026-07-12 | Initial public working draft |
 | 0.2.0 | 2026-07-15 | Added §3.9: duplicate `jti` within a submitted chain is rejected with `INVALID_REQUEST` (CHAIN-11, KERNEL-NEG-02) |
+| 0.3.0 | 2026-08-09 | §3.6/§6: corrected max_depth binding-limit pseudocode for chains with a mix of explicit and omitted `max_depth` claims — `min(max_depth_i)` ranges only over tokens that explicitly carry the claim; an omitting token never implicitly contributes `DEFAULT_MAX_DEPTH`. No change to the normative formula itself, and no effect on chains where every token supplies an explicit claim. |
