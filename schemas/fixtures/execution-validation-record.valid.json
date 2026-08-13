@@ -1,0 +1,10 @@
+{
+  "id": "xv_1735603302_f9a8b1",
+  "decision_ref": "dec_1735603300_a1b2c3",
+  "authority_refs_checked": ["del_root_7a91f3", "del_hop1_c204be", "del_hop2_9e5b71"],
+  "checked_at": 1735603302,
+  "result": "valid",
+  "reasons": [],
+  "invalidation_refs": [],
+  "checked_by": "did:agf:acme:gateway-01"
+}

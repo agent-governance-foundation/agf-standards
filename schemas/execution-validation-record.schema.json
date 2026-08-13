@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-governance-foundation.github.io/agf-standards/schemas/execution-validation-record.schema.json",
+  "title": "Execution Validation Record",
+  "description": "The AGF serialization of an Execution-Time Authorization Validation check (Spec 30 §4): evidence that a PEP checked whether a previously issued Decision's Authorities are still valid immediately before dispatch, and what it found. Not a kernel object (Spec 00 §1's six objects are closed) — a Core-format artifact that correlates to the kernel Decision object (decision_ref) and, when applicable, existing kernel Invalidation records (invalidation_refs).",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Unique identifier of this validation record."
+    },
+    "decision_ref": {
+      "type": "string",
+      "description": "id of the Decision (Spec 00 §3.4) this check was performed for."
+    },
+    "authority_refs_checked": {
+      "type": "array",
+      "description": "The specific Authority ids checked (Spec 30 §3) — normally all of decision_ref's authority_refs.",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1
+    },
+    "checked_at": {
+      "type": "integer",
+      "description": "Unix timestamp when the check was performed."
+    },
+    "result": {
+      "type": "string",
+      "description": "Whether every checked Authority was still valid at checked_at.",
+      "enum": ["valid", "invalid"]
+    },
+    "reasons": {
+      "type": "array",
+      "description": "Machine-readable reasons for an invalid result. Empty when result is valid; one or more of the enum values MAY apply when invalid.",
+      "items": {
+        "type": "string",
+        "enum": ["authority_revoked", "authority_expired", "platform_halted"]
+      }
+    },
+    "invalidation_refs": {
+      "type": "array",
+      "description": "ids of the pre-existing Invalidation record(s) (Spec 00 §3.6) that caused an invalid result when authority_revoked applies. This check discovers pre-existing Invalidation records; it does not create new ones.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "checked_by": {
+      "type": "string",
+      "description": "Actor id of the PEP that performed the check."
+    }
+  },
+  "required": [
+    "id",
+    "decision_ref",
+    "authority_refs_checked",
+    "checked_at",
+    "result",
+    "checked_by"
+  ],
+  "if": {
+    "properties": {
+      "result": {
+        "const": "invalid"
+      }
+    },
+    "required": ["result"]
+  },
+  "then": {
+    "required": ["reasons"],
+    "properties": {
+      "reasons": {
+        "minItems": 1
+      }
+    }
+  },
+  "additionalProperties": true
+}

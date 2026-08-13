@@ -25,10 +25,34 @@ Spec 00 §6's conformance vectors. `kernel/check.py` validates every fixture
 against its schema (falls back to a JSON well-formedness check if
 `jsonschema` isn't installed).
 
+## Core-format schemas (available)
+
+Non-kernel AGF artifacts that correlate to the kernel objects without extending
+them (Spec 00 §2's Core-format layer):
+
+| Schema | Source spec | Fixtures |
+|---|---|---|
+| [`execution-validation-record.schema.json`](execution-validation-record.schema.json) | Spec 30 §4 — Execution-Time Authorization Validation | [`fixtures/`](fixtures/) — `execution-validation-record.valid.json`, `execution-validation-record.invalid.json` |
+
+Validate with `jsonschema` directly (no dedicated `check.py` yet for this
+single schema — see `kernel/check.py` for the pattern once more Core-format
+schemas land here):
+
+```python
+import json, jsonschema
+schema = json.load(open("execution-validation-record.schema.json"))
+doc = json.load(open("fixtures/execution-validation-record.valid.json"))
+jsonschema.Draft202012Validator(schema).validate(doc)
+```
+
+`execution-validation-record.invalid.json` fails because `result: "invalid"`
+is reported with no `reasons` — an invalid result with no stated cause defeats
+the audit purpose of the record (Spec 30 §4).
+
 ## Planned artifacts
 
-The AGF wire formats — the reference serialization of the kernel objects —
-are tracked separately:
+The remaining AGF wire formats — the reference serialization of the kernel
+objects — are tracked separately, not yet built:
 
 | Artifact | Source spec | Status |
 |---|---|---|

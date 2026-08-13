@@ -197,6 +197,44 @@ backend this trace's own scenario is realistic for:
   Draft proposals); `trace.json`'s `policy.note` continues to label this
   illustrative-only rather than implying a rule exists.
 
+## Execution-Time Authorization Validation (Spec 30) — the corrected behavior, not yet the default
+
+This scenario's central finding — an already-issued `ALLOW` can be dispatched
+after its authority is revoked, because AGF performs exactly one check, at
+decision time — is now addressed by
+[Spec 30](../../../specs/30-execution-time-authorization-validation.md)
+(`RFC 0000-execution-time-authorization-validation`): an optional gate a PEP
+performs immediately before dispatch, re-checking only what can actually
+change in that window (revocation, expiry, platform emergency-halt state) —
+never signatures, chain structure, scope, or policy, none of which can change
+on an already-verified chain.
+
+`trace.json`'s new `execution_validation_check` block shows exactly what this
+control would have produced for this scenario's own chain and timeline: a
+check at `checked_at: 1785852002` (the same instant as
+`execution_receipt.execution_attempted_at`) finding `del_hop1_c204be` revoked,
+`result: "invalid"`, and — had the gate been enabled — dispatch blocked before
+`upstream_status: accepted` ever happened. No settlement, no reconciliation
+exception; there would be nothing left to reconcile.
+
+**This is not this trace's default-behavior narrative.** The gate is
+implemented in `agf-runtime` but ships **disabled by default**
+(`settings.execution_time_validation_enabled`), pending `RR-0003`
+(`agf-profile/implementation/review-records/`) — enabling it by default would
+be a behavior change for existing deployments (a request that previously
+always dispatched can now be denied at dispatch), and that call belongs to
+the review record, not to this worked example. So the rest of this
+narrative — decision, dispatch, settlement, reconciliation exception — remains
+this trace's accurate account of what happens today. `execution_validation_check`
+is evidence of what Spec 30 *would* have caught, deliberately kept separate
+from, not substituted for, the actual recorded outcome above.
+
+The API path
+(`POST /v1/decisions/{artifact_id}/validate-execution`, Spec 30 §5) is
+unaffected by that default — it's always available for a PEP to call
+explicitly, independent of whether the built-in gateway proxies auto-invoke
+it.
+
 ## Payload identity (`request_hash`)
 
 `decision_receipt.action.request_hash`, `execution_receipt.request_hash`,

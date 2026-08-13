@@ -21,3 +21,4 @@ An accepted RFC is a decision, not a spec change by itself — the spec edits la
 | [0001](0001-aap-core-kernel.md) | AAP-Core — a normative kernel for the Agent Authorization Protocol | Draft |
 | [0000](0000-single-check-decision-semantics.md) | Single-Check Decision Semantics | Draft |
 | [0000](0000-revocation-authorization.md) | Revocation Authorization | Draft |
+| [0000](0000-execution-time-authorization-validation.md) | Execution-Time Authorization Validation | Draft |

@@ -132,7 +132,23 @@
     "org_id": "acme",
     "propagation_window_clarification": "Spec 05 §5.5 governs a new decision evaluation during/after the propagation window; this scenario models the dispatch of an already-issued decision without a second authority evaluation. This is a scenario about the gap between decision-time and execution-time authority, not a claim that AGF permits dispatch after revocation.",
     "propagation_window_runtime_evidence": "The 'no second authority evaluation between decision and dispatch' claim above is verified against the current agf-runtime reference implementation, not merely asserted: perform_decision() (src/presentation/api/routes/decide.py:115) is called exactly once per request by /v1/decide (decide.py:996) and by each of the three gateway-proxy routes (http_gateway_proxy.py:141, mcp_gateway_proxy.py:123, a2a_gateway_proxy.py:151) — no second or independent revalidation call exists anywhere in that codebase as of this note. This is cited as reference-implementation behavior, not as normative specification text: no AGF spec currently states single-check decision semantics as a requirement (a draft RFC, 0000-single-check-decision-semantics, proposes formalizing this — status Draft, not adopted). Two implementations could in principle diverge on this point while both remaining silent-conformant.",
+    "execution_time_validation_status": "As of this trace's date, Spec 30 (Execution-Time Authorization Validation, RFC 0000-execution-time-authorization-validation) defines an OPTIONAL gate that closes exactly this window — see the sibling execution_validation_check block below for what it would have produced for this scenario. It exists in agf-runtime but is NOT enabled by default (settings.execution_time_validation_enabled, off pending RR-0003) — so the outcome recorded on this execution_receipt (dispatch proceeded, outcome: executed) remains this trace's accurate default-behavior narrative, not something Spec 30's mere existence changes by itself.",
     "note": "execution_attempted_at is a gateway-local dispatch timestamp, not a field on the signed kernel receipt itself (the kernel schema only signs completed_at, i.e. when the outcome was known). Flagging this because it matters for the proof/inference matrix: the moment of dispatch is evidenced by infra logs, not by the cryptographically signed artifact."
+  },
+
+  "execution_validation_check": {
+    "_kind": "Spec 30 §4 Execution Validation Record shape — NOT part of this trace's actual default-behavior narrative above (execution_receipt already records that dispatch proceeded). This block models what the check WOULD have produced for this exact chain/timeline if agf-runtime's optional gate (settings.execution_time_validation_enabled) had been turned on — i.e. the corrected behavior Spec 30 exists to provide, shown here rather than asserted without evidence.",
+    "id": "xv_1785852002_a4f0c2",
+    "decision_ref": "dec_1785852000_b7f2a1",
+    "authority_refs_checked": ["del_root_7a91f3", "del_hop1_c204be", "del_hop2_9e5b71"],
+    "checked_at": 1785852002,
+    "result": "invalid",
+    "reasons": ["authority_revoked"],
+    "invalidation_refs": ["del_hop1_c204be"],
+    "invalidation_refs_note": "References revocation_record.subject. Spec 30 §4 has invalidation_refs point at the revoking backend's own invalidation-record id when one exists (PgRevocationStore rows have one); this synthetic trace's revocation_record has no such id minted, so — matching Spec 30 §4's documented fallback for backends without a distinct id (e.g. FileRevocationStore) — it falls back to the jti of the revoked authority itself.",
+    "checked_by": "did:agf:acme:gateway-01",
+    "checked_at_vs_dispatch": "checked_at (1785852002) is the same instant as execution_receipt.execution_attempted_at — the gate runs immediately before dispatch, per Spec 30 §3, not at some other point in the timeline.",
+    "outcome_if_enabled": "Dispatch at 1785852002 would have been blocked (HTTP 403 / JSON-RPC -32000, AGF_EXECUTION_VALIDATION_INVALID per Spec 30 §5's error shape) instead of proceeding to execution_receipt.upstream_status: accepted. execution_receipt.outcome would read not_executed, not executed, and settlement_record / reconciliation_exception below would not exist for this request at all — reconciliation would have nothing to find, because there would be nothing to reconcile."
   },
 
   "settlement_record": {
