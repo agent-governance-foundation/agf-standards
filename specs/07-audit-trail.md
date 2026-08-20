@@ -350,12 +350,13 @@ A Decision artifact proves what was *permitted*. An **Execution Receipt** proves
   "attempted": true,
   "outcome": "executed",
   "upstream_status": 200,
+  "execution_validation_ref": "xv_1735603400_7c2a91",
   "gateway": "mcp",
   "completed_at": 1735603401,
   "signer": "https://gateway.acme.com",
   "algorithm": "ES256",
   "signature": "base64...",
-  "signature_version": "1.0"
+  "signature_version": "1.1"
 }
 ```
 
@@ -366,15 +367,23 @@ A Decision artifact proves what was *permitted*. An **Execution Receipt** proves
 | `attempted` | Yes | Whether execution was attempted after the Decision |
 | `outcome` | Yes | `executed`, `not_executed`, or `unknown` — never inferred (Spec 00 §3.5) |
 | `upstream_status` | No | Transport-level outcome evidence (e.g. HTTP status), outside the signed payload |
+| `execution_validation_ref` | No | Id of the Spec 30 §4 Execution Validation Record checked immediately before this dispatch, if any (Spec 30 execution-time validation was performed). Absent when it wasn't. **Inside the signed payload as of `signature_version 1.1`** — see §10.2. |
 | `gateway` | Yes | The enforcement point that observed the outcome (`mcp`, `a2a`, `http`) |
 | `completed_at` | Yes | When the outcome was recorded |
 | `signer` | Yes | Identity of the enforcement point |
 | `algorithm` / `signature` | Yes | Signature per §4.2's honesty rules |
-| `signature_version` | Yes | Signed-payload layout version (currently `1.0`) |
+| `signature_version` | Yes | Signed-payload layout version — `1.0` or `1.1` (§10.2) |
 
 ### 10.2 Signing
 
-The signature covers a named, closed payload — exactly `{receipt_id, decision_ref, attempted, outcome, completed_at, gateway, signature_version}` — canonically encoded as in §4.3 (sorted keys, compact separators). `upstream_status` and storage metadata are deliberately outside the signed payload: operational detail must never invalidate a receipt. §4.2's algorithm rules apply unchanged (ES256; any fallback recorded honestly).
+The signature covers a named, closed payload, canonically encoded as in §4.3 (sorted keys, compact separators). Which fields are in that payload depends on `signature_version`:
+
+- **`signature_version: "1.0"`** — exactly `{receipt_id, decision_ref, attempted, outcome, completed_at, gateway, signature_version}`.
+- **`signature_version: "1.1"`** — the same seven fields, plus `execution_validation_ref` (present and `null` when no execution-time check preceded this receipt, never omitted — the signed shape must not depend on whether the check ran). A verifier reconstructs the payload for the version the receipt actually declares; it must never assume every receipt is the latest version.
+
+`1.0` receipts issued before `1.1` existed remain valid under the `1.0` shape — `signature_version` is not retroactively reinterpreted.
+
+`upstream_status` and other storage metadata that is genuinely appended to the record after the fact stay outside the signed payload in both versions: operational detail added later must never invalidate a receipt. `execution_validation_ref` moved inside the signed payload in `1.1` specifically because it is always known before the receipt is built, not appended afterward — leaving a value that is known at build time outside the signature means it can be altered on the stored record without invalidating that record's own signature, which defeats its purpose as evidence correlating the receipt to the execution-time check that preceded it. §4.2's algorithm rules apply unchanged (ES256; any fallback recorded honestly).
 
 ### 10.3 Emission
 

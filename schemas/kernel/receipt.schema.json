@@ -35,7 +35,7 @@
     },
     "execution_validation_ref": {
       "type": "string",
-      "description": "Optional id of the Execution Validation Record (Spec 30 §4, schemas/execution-validation-record.schema.json) that preceded this Receipt's dispatch, if the PEP performed that check. Not a kernel field — an optional Core-format correlation, absent when Execution-Time Authorization Validation (Spec 30) was not performed."
+      "description": "Optional id of the Execution Validation Record (Spec 30 §4, schemas/execution-validation-record.schema.json) that preceded this Receipt's dispatch, if the PEP performed that check. Not a kernel field — an optional Core-format correlation, absent when Execution-Time Authorization Validation (Spec 30) was not performed. As of signature_version 1.1 (Spec 07 §10.2), this field is inside the Receipt's signed payload; under 1.0 it was not — check signature_version before treating this correlation as cryptographically bound, not just present."
     }
   },
   "required": [
