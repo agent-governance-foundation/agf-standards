@@ -1,7 +1,9 @@
 # Specification 30: Execution-Time Authorization Validation
 
-**Version:** 0.1.0 (Draft)  
-**Status:** Working Draft  
+**Version:** 0.1.1 (Draft)  
+**Status:** Working Draft — §3-6 (the execution-time check, its API contract, and optional gateway
+integration) has a reference implementation, reachable both as a direct API call for custom Policy
+Enforcement Points and via at least one client SDK.  
 **Supersedes:** None — new specification, per RFC 0000-execution-time-authorization-validation  
 **Layer:** Profile
 
@@ -201,3 +203,4 @@ request lifecycle; it introduces no new trust anchors, signing keys, or write pa
 | Version | Date | Changes |
 |---------|------|---------|
 | 0.1.0 | 2026-08-13 | Initial public working draft, per RFC 0000-execution-time-authorization-validation |
+| 0.1.1 | 2026-08-25 | §3-6 has a reference implementation, reachable directly and via at least one client SDK. |
