@@ -50,7 +50,7 @@ Domain and policy layers over the kernel — trust zones, risk layers, human ove
 | [27](27-global-trust-registry-protocol.md) | Global Trust Registry Protocol (`AGF-GTR-1.0`) | Working Draft |
 | [28](28-federation-revocation-sync.md) | Federation Revocation Sync | Working Draft |
 | [29](29-enterprise-identity-assurance.md) | Enterprise Identity Assurance | Working Draft — §4-18 (including Session Governance, Dynamic Roles and Permissions, and Passwordless Authentication/WebAuthn) has a reference implementation; SAML (§19) out of scope, pending a dedicated companion RFC |
-| [30](30-execution-time-authorization-validation.md) | Execution-Time Authorization Validation | Working Draft — per RFC 0000-execution-time-authorization-validation; no reference implementation yet |
+| [30](30-execution-time-authorization-validation.md) | Execution-Time Authorization Validation | Working Draft — per RFC 0000-execution-time-authorization-validation; §3-6 has a reference implementation |
 
 ### Adapters
 
