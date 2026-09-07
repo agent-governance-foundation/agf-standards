@@ -1,8 +1,8 @@
 # Specification 06: Policy Model and Versioning
 
-**Version:** 0.2.0 (Draft)  
+**Version:** 0.3.0 (Draft)  
 **Status:** Working Draft  
-**Supersedes:** 0.1.0  
+**Supersedes:** 0.2.0  
 **Layer:** Core format  
 
 ## 1. Introduction
@@ -88,6 +88,23 @@ valid_delegation_chain {
 }
 ```
 
+### 2.5 Evaluation Explainability
+
+Decision responses that support it (§3.3 dry-run responses; real `/v1/decide` responses where an implementation chooses to extend this) MAY carry an `explain` field:
+
+```json
+"explain": [
+  "rule 'allow' fired: valid_delegation_chain AND risk_score < 70",
+  "rule 'deny' not evaluated: no matching clause"
+]
+```
+
+Each entry is a human-readable statement of which rule fired, or was skipped and why.
+
+`explain` MUST be omitted, never fabricated, when the underlying policy engine cannot produce an evaluation trace — e.g. a stub evaluator used when no policy engine server is reachable (§2.1), or an adapter for an alternative policy language that has no trace facility. An absent `explain` field means no trace was available; it is not an error condition.
+
+Because §2.1 permits alternative policy languages (Cedar, custom) with their own adapters, this spec does not mandate a uniform trace event schema — only that each surfaced entry be a human-readable string.
+
 ## 3. Policy Repository
 
 ### 3.1 Storage
@@ -128,9 +145,45 @@ This section describes three additional capabilities of the policy lifecycle:
 
 **Canary rollout.** `POST /v1/policies/{id}/canary` starts a sticky percentage-based rollout (1–99%) of a candidate policy alongside the current active one; `GET` reads the current canary state, `DELETE` stops it. `POST /v1/policies/{id}/rollback` reverts to the previously active policy.
 
-**Policy dry-run.** `POST /v1/policies/{id}/dry-run` evaluates a candidate policy version against a supplied (or synthetic) decision input with no persistence, no HITL row creation, and no webhook dispatch — a genuine side-effect-free simulation, letting an operator see what a policy change *would* decide before activating it.
+**Policy dry-run.** Two dry-run modes exist, both side-effect-free (no persistence, no HITL row creation, no webhook dispatch):
 
-None of these three have full normative rules in this spec yet — state transitions, canary traffic-split semantics, and dry-run input schema remain to be formally specified.
+#### 3.3.1 Candidate-policy dry-run
+
+`POST /v1/policies/{id}/dry-run` evaluates a stored candidate policy version — identified by `{id}`, not the org's currently active policy — against a supplied decision input, letting an operator see what a policy change *would* decide before activating it.
+
+**Input:**
+
+| Field | Type | Required |
+|---|---|---|
+| `chain` | array of JWTs | yes |
+| `action_type` | string | yes |
+| `action_resource` | string | yes |
+| `audience` | string | yes |
+| `context` | object | no |
+
+**Output:**
+
+| Field | Type |
+|---|---|
+| `decision` | `ALLOW` \| `ALLOW_WITH_CAUTION` \| `DENY` \| `REVIEW_REQUIRED` |
+| `matched_rules` | array of strings |
+| `trust_score` | integer |
+| `risk_score` | float |
+| `evaluation_time_ms` | float |
+
+#### 3.3.2 Live dry-run
+
+`POST /v1/decide` accepts an optional `dry_run: true` flag. Unlike §3.3.1, this evaluates the caller's request against the org's *currently active* policy, using the caller's real identity and delegation state — the same evaluation path a real decision would take, short-circuited before any side effect.
+
+When `dry_run: true`:
+- The PDP MUST NOT persist an audit artifact
+- The PDP MUST NOT consume quota
+- The PDP MUST NOT create an HITL approval row, even if the decision would otherwise be `REVIEW_REQUIRED`
+- The PDP MUST NOT fire webhooks
+
+The response carries the same shape as a real `/v1/decide` response, plus `simulated: true`, so a caller cannot mistake a dry-run result for a persisted decision.
+
+PR-style review workflow state transitions and canary traffic-split semantics do not yet have full normative rules in this spec.
 
 ## 4. Policy Versioning
 
@@ -411,3 +464,4 @@ Implementations MUST detect and log policy conflicts. When a conflict is detecte
 |---------|------|---------|
 | 0.1.0 | 2026-07-12 | Initial public working draft |
 | 0.2.0 | 2026-07-14 | §6.5: missing requested policy version must surface in the decide response (`POLICY_VERSION_NOT_FOUND`, `policy_version_requested`/`policy_version_applied`) and the decision is capped at `ALLOW_WITH_CAUTION` (KERNEL-NEG-03, RFC 0001) |
+| 0.3.0 | 2026-09-07 | §3.3 split into §3.3.1 (candidate-policy dry-run, now formally specified with input/output schema) and §3.3.2 (new: live dry-run via `dry_run: true` on `/v1/decide`); added §2.5 Evaluation Explainability (`explain` field) |
