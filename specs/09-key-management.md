@@ -1,6 +1,6 @@
 # Specification 09: Key Management and Rotation
 
-**Version:** 0.1.0 (Draft)  
+**Version:** 0.1.1 (Draft)  
 **Status:** Working Draft  
 **Supersedes:** None  
 **Layer:** Core format  
@@ -87,6 +87,8 @@ openssl enc -aes-256-gcm -salt -in private-key.pem -out private-key.enc
 6. After grace period, remove old key from DID document
 7. Securely delete old private key
 ```
+
+**Exception — evidence-signing keys.** Step 6 fits keys whose signed objects expire, such as delegation tokens. The public half of a key that signs retained evidence (a PDP's key, Spec 07 §4.5) is never removed from its published key set while evidence it signed is retained (step 7 still applies: the old private key is securely deleted), and is published as a key set rather than only through a DID document (§7.1). Spec 07 §4.5 governs those keys' publication, rotation, and retirement.
 
 ### 5.3 Rotation API
 
@@ -224,3 +226,4 @@ All key operations (generation, rotation, revocation) MUST be audited:
 | Version | Date | Changes |
 |---------|------|---------|
 | 0.1.0 | 2026-07-12 | Initial public working draft |
+| 0.1.1 | 2026-09-29 | §5.2: exception for evidence-signing keys — retained in the published key set, governed by Spec 07 §4.5 |

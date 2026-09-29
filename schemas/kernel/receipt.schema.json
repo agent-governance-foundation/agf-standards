@@ -33,6 +33,10 @@
       "type": "string",
       "description": "Signature over the Receipt content."
     },
+    "kid": {
+      "type": "string",
+      "description": "Optional key identifier for ES256 signatures: the RFC 7638 JWK SHA-256 thumbprint (base64url, no padding) of the signing key, selected from the signer's published key set (Spec 07 §4.5). Outside the signed payload — a key-selection hint, not evidence."
+    },
     "execution_validation_ref": {
       "type": "string",
       "description": "Optional id of the Execution Validation Record (Spec 30 §4, schemas/execution-validation-record.schema.json) that preceded this Receipt's dispatch, if the PEP performed that check. Not a kernel field — an optional Core-format correlation, absent when Execution-Time Authorization Validation (Spec 30) was not performed. As of signature_version 1.1 (Spec 07 §10.2), this field is inside the Receipt's signed payload; under 1.0 it was not — check signature_version before treating this correlation as cryptographically bound, not just present."

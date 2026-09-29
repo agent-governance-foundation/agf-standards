@@ -1,8 +1,8 @@
 # Specification 07: Audit Trail and Decision Provenance
 
-**Version:** 0.2.0 (Draft)  
+**Version:** 0.3.0 (Draft)  
 **Status:** Working Draft  
-**Supersedes:** 0.1.1  
+**Supersedes:** 0.2.0  
 **Layer:** Core format  
 
 ## 1. Introduction
@@ -72,6 +72,7 @@ Auditors should not need access to the original system to verify a decision. The
     {
       "signer": "did:example:pdp-01",
       "algorithm": "ES256",
+      "kid": "NzbLsXh8uDCcd-6MNwXF4W_7noWXFZAfHkxZsRGC9Xs",
       "signature": "base64...",
       "timestamp": 1735603301
     }
@@ -155,6 +156,46 @@ The primary PDP signature MUST be present and valid. An artifact missing a PDP s
 | Level 3 | PDP + trust evaluator + policy engine |
 
 Implementations targeting Level 2 or 3 MUST ensure the additional services sign each artifact. Auditors verifying Level 2 or 3 artifacts MUST check all required signatures and reject artifacts where any required signature is missing or invalid.
+
+### 4.5 Key Publication and Selection
+
+A signature is only independently verifiable if the verifier can obtain the signer's public key without privileged access to the signer's system (§2) — no account, credential, or operator cooperation. Retrieving the key set live still relies on TLS to the signer's origin at fetch time (see Locating the key set below). This section defines how ES256 signing keys are published and how a verifier selects the key for a given signature.
+
+**Scope.** The key set covers every ES256 key a PDP signs with, whatever it signs — decision artifacts and Receipts, and any other PDP-signed object (for example decision records, trust summaries, override tokens, or delegation tokens the PDP issues under its own identity). One key typically signs several of these, so a rotation affects all of them at once, and every verifier of any of them selects keys by the rules below.
+
+**Key identifier.** Every ES256 signature block — decision artifact `signatures[]` entries (§3.1) and Receipts (§10.1) — SHOULD carry `kid`: the RFC 7638 JWK SHA-256 thumbprint of the signing public key, base64url-encoded without padding. Because the thumbprint is computed from the key itself, a verifier holding any copy of the key can recompute and confirm it. `kid` is outside the signed payload (§4.3, §10.2): it is a selection hint, not evidence. An altered `kid` can make verification fail; it can never make an invalid signature verify, because the key it selects must come from the signer's published key set and the signature must still verify against that key. HMAC-SHA256 signatures carry no `kid` — a shared secret is never published (§4.2).
+
+**Key set.** A PDP MUST publish its ES256 public keys as a JSON Web Key Set (RFC 7517) at `/.well-known/jwks.json`, served without authentication. Each key MUST include `kty`, `crv`, `x`, `y`, `kid`, `alg` (`"ES256"`), and `use` (`"sig"`), plus:
+
+| Member | Required | Meaning |
+|--------|----------|---------|
+| `agf_status` | Yes | `active` (currently signing), `retired` (rotated out normally — signatures made while it was active remain valid), or `revoked` (compromised) |
+| `agf_not_before` | No | Earliest time (Unix seconds) the key signed. Absent when unknown, e.g. a key already in use before key publication existed |
+| `agf_not_after` | When not `active` | Time (Unix seconds) the key stopped being trusted for signing |
+
+The key set MUST NOT contain private key material. A key MUST remain in the set for at least as long as artifacts it signed are retained (§5.2) — removing a key strands every artifact it signed. This is a deliberate exception to Spec 09 §5.2 step 6 (remove the old key after the grace period), which fits keys whose signed objects expire, such as delegation tokens, but not keys that sign retained evidence. Likewise, for evidence-signing keys this key set, not the DID document of Spec 09 §7.1, is the distribution mechanism a verifier relies on. On rotation, the previous key becomes `retired` with `agf_not_after` set to the rotation time; exactly one key SHOULD be `active` at a time. A key MUST NOT produce signatures after its `agf_not_after`, so a rotation procedure MUST ensure the previous key has stopped signing before the retirement time is recorded.
+
+**Key-set integrity.** Changes to the key set — publishing a key, rotating, retiring, revoking — MUST be explicit, recorded operator actions (who and when). They MUST NOT happen as an implicit side effect of a PDP starting with a different signing key. A PDP whose loaded signing key is not the key set's `active` key MUST refuse to sign (fail closed) rather than sign with an unpublished key or alter the key set to match. As with §4.2's HMAC fallback, an implementation MAY automate key-set changes in non-production environments whose evidence is not relied on.
+
+**Locating the key set.** When the signer identity (`signer`) is an HTTPS origin, the key set is at `{signer}/.well-known/jwks.json`. Otherwise the verifier obtains the key-set location out of band. Either way, the key set's authenticity rests on TLS to that origin at fetch time; a verifier checking evidence long after the fact SHOULD use a key-set snapshot captured with the evidence rather than assume the live endpoint is still reachable or unchanged.
+
+**Signer identity changes.** A PDP's signer identity is stamped into every signature it has issued, so changing it must not strand earlier evidence. When a PDP changes its signer identity:
+
+1. The key set at the new identity's origin MUST list every earlier signer identity in a top-level `agf_previous_signers` array.
+2. Each earlier identity that is an HTTPS origin MUST keep serving `/.well-known/jwks.json` for as long as evidence naming it is retained — either the key set itself, or an HTTPS redirect to the new origin's key set.
+3. A verifier fetches `{recorded signer}/.well-known/jwks.json` and follows **at most one** redirect. The redirect MUST be HTTPS and MUST point directly at `{successor origin}/.well-known/jwks.json`; a verifier refuses a non-HTTPS hop, a second redirect, or a redirect to any other path.
+4. Origins are compared **exactly after normalization**: the RFC 6454 ASCII serialization (lowercase scheme and host, default port 443 omitted, no path, query, fragment, or trailing slash). No prefix, suffix, subdomain, or other loose URL matching. `agf_previous_signers` entries MUST be normalized origins.
+5. The verifier accepts the key set it reaches only if either (a) no redirect occurred and the key set was served by the recorded signer's normalized origin, or (b) exactly one redirect occurred, it was served by the recorded signer's normalized origin, and the successor's key set lists that origin in `agf_previous_signers`.
+
+The listing alone proves nothing: any origin could claim to succeed any other. The redirect alone is not enough either: the listing is what shows the new origin accepts the succession. **What this establishes is limited.** The redirect and the listing show that the two origins agree on the succession *at verification time*, each over its own TLS. They do not show who controlled either domain when an older artifact was signed. A verifier MUST report such a result as **live-origin verification** (direct, or via succession), never as historical attestation. A key-set snapshot captured with the evidence supports later verification, but historical attestation additionally requires independently authenticated evidence of the key set’s publication and time. If an earlier identity cannot be served (it is not an HTTPS origin, or its domain is no longer controlled), its evidence can only be verified with a key-set location obtained out of band, and the verifier MUST report the key-set provenance as out-of-band rather than as verified.
+
+**Key selection.** For an ES256 signature, a verifier performs every step below; a key's presence in the key set, a matching `kid`, or a covering validity window never substitutes for verifying the signature.
+
+1. **Candidates.** If `kid` is present, the only candidate is the key-set entry with that `kid`. If the key set has no such entry, the result is **unknown key**, reported distinctly from an invalid signature. If `kid` is absent — signatures issued before this section, or objects whose format has no key-set `kid` — the candidates are the non-revoked keys whose validity window covers the signature's timestamp. The timestamp only narrows the candidates; it never selects a key by itself. For objects whose `kid` is defined by another specification (such as a delegation token's DID-derived JOSE header `kid`, Spec 01), that `kid` is not a key-set identifier: the verifier treats it as absent and uses the object's issued-at time.
+2. **Key-set entry check.** For each candidate, the verifier recomputes the RFC 7638 JWK SHA-256 thumbprint from the entry's public key members. If it does not equal the entry's `kid`, the entry is rejected and reported as **key-set mismatch**; it is never used.
+3. **Cryptographic verification.** The verifier verifies the signature over the reconstructed signed payload (§4.3, §10.2) with the candidate's public key. With `kid` present, failure is **invalid signature**. Without `kid`, only a candidate whose key actually verifies the signature is selected; if none does, the result is **invalid signature**.
+4. **Full validity window.** The signature's timestamp MUST NOT be before the selected key's `agf_not_before` (when present) and MUST NOT be after its `agf_not_after` (when present). Otherwise the result is **outside key validity**, even though the signature verified.
+5. **Status.** A signature by a `revoked` key is never silently accepted. The signing timestamp is asserted by the signer, so a compromised key can backdate; such signatures are reported as **revoked key** regardless of timestamp, and any acceptance requires evidence outside the artifact.
 
 ## 5. Storage
 
@@ -355,6 +396,7 @@ A Decision artifact proves what was *permitted*. An **Execution Receipt** proves
   "completed_at": 1735603401,
   "signer": "https://gateway.acme.com",
   "algorithm": "ES256",
+  "kid": "NzbLsXh8uDCcd-6MNwXF4W_7noWXFZAfHkxZsRGC9Xs",
   "signature": "base64...",
   "signature_version": "1.1"
 }
@@ -372,6 +414,7 @@ A Decision artifact proves what was *permitted*. An **Execution Receipt** proves
 | `completed_at` | Yes | When the outcome was recorded |
 | `signer` | Yes | Identity of the enforcement point |
 | `algorithm` / `signature` | Yes | Signature per §4.2's honesty rules |
+| `kid` | No | Key identifier per §4.5 (ES256 only). Outside the signed payload — a key-selection hint, not evidence |
 | `signature_version` | Yes | Signed-payload layout version — `1.0` or `1.1` (§10.2) |
 
 ### 10.2 Signing
@@ -383,7 +426,7 @@ The signature covers a named, closed payload, canonically encoded as in §4.3 (s
 
 `1.0` receipts issued before `1.1` existed remain valid under the `1.0` shape — `signature_version` is not retroactively reinterpreted.
 
-`upstream_status` and other storage metadata that is genuinely appended to the record after the fact stay outside the signed payload in both versions: operational detail added later must never invalidate a receipt. `execution_validation_ref` moved inside the signed payload in `1.1` specifically because it is always known before the receipt is built, not appended afterward — leaving a value that is known at build time outside the signature means it can be altered on the stored record without invalidating that record's own signature, which defeats its purpose as evidence correlating the receipt to the execution-time check that preceded it. §4.2's algorithm rules apply unchanged (ES256; any fallback recorded honestly).
+`kid` is outside the signed payload in both versions (§4.5). `upstream_status` and other storage metadata that is genuinely appended to the record after the fact stay outside the signed payload in both versions: operational detail added later must never invalidate a receipt. `execution_validation_ref` moved inside the signed payload in `1.1` specifically because it is always known before the receipt is built, not appended afterward — leaving a value that is known at build time outside the signature means it can be altered on the stored record without invalidating that record's own signature, which defeats its purpose as evidence correlating the receipt to the execution-time check that preceded it. §4.2's algorithm rules apply unchanged (ES256; any fallback recorded honestly).
 
 ### 10.3 Emission
 
@@ -419,3 +462,4 @@ Receipt verification runs through `POST /v1/audit/verify` (§6.3.1), which check
 | 0.1.0 | 2026-07-12 | Initial public working draft |
 | 0.1.1 | 2026-07-14 | §3.2 `policy` field definition documents the conditional `requested_version`/`used_version` entries for the missing-policy-version state (Spec 06 §6.5) |
 | 0.2.0 | 2026-07-15 | Added §10 Execution Receipts (kernel Receipt serialization: format, closed signed payload, gateway emission rules, lifecycle) and §6.3.1 two-stage verification with structured violation codes (EXECUTED_AFTER_DENY, EXECUTED_WITHOUT_APPROVAL, RECEIPT_WITHOUT_DECISION, RECEIPT_SIGNATURE_INVALID, POLICY_VERSION_MISMATCH, PARENT_REVOKED); Change Log renumbered §10→§11 |
+| 0.3.0 | 2026-09-29 | Added §4.5 Key Publication and Selection: `kid` (RFC 7638 thumbprint) on ES256 signature blocks, outside the signed payload; unauthenticated JWKS at `/.well-known/jwks.json` with `agf_status`/`agf_not_before`/`agf_not_after` and retained retired keys; verifier key-selection rules — thumbprint recomputation, cryptographic verification with the selected key, full `agf_not_before`/`agf_not_after` window, revoked status; unknown key, key-set mismatch, invalid signature, outside key validity and revoked key reported distinctly; key set covers every PDP-signed object; key-set changes are explicit operator actions and a PDP fails closed on a key mismatch; explicit exception to Spec 09 §5.2 step 6 for evidence-signing keys; signer identity changes (`agf_previous_signers` plus a single HTTPS redirect from the earlier origin's key-set path, exact normalized-origin comparison, both required; reported as live-origin verification, not historical attestation). `kid` added to §3.1 and §10.1 examples, §10.1 field table, §10.2 |
