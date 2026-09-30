@@ -1,8 +1,8 @@
 # Specification 07: Audit Trail and Decision Provenance
 
-**Version:** 0.3.1 (Draft)  
+**Version:** 0.3.2 (Draft)  
 **Status:** Working Draft  
-**Supersedes:** 0.3.0  
+**Supersedes:** 0.3.1  
 **Layer:** Core format  
 
 ## 1. Introduction
@@ -193,11 +193,11 @@ The listing alone proves nothing: any origin could claim to succeed any other. T
 
 **Key selection.** For an ES256 signature, a verifier performs every step below; a key's presence in the key set, a matching `kid`, or a covering validity window never substitutes for verifying the signature.
 
-1. **Candidates.** If `kid` is present, the only candidate is the key-set entry with that `kid`. If the key set has no such entry, the result is **unknown key**, reported distinctly from an invalid signature. If `kid` is absent — signatures issued before this section, or objects whose format has no key-set `kid` — the candidates are the non-revoked keys whose validity window covers the signature's timestamp. The timestamp only narrows the candidates; it never selects a key by itself. For objects whose `kid` is defined by another specification (such as a delegation token's DID-derived JOSE header `kid`, Spec 01), that `kid` is not a key-set identifier: the verifier treats it as absent and uses the object's issued-at time.
+1. **Candidates.** If `kid` is present, the only candidate is the key-set entry with that `kid`. If the key set has no such entry, the result is **unknown key**, reported distinctly from an invalid signature. If `kid` is absent — signatures issued before this section, or objects whose format has no key-set `kid` — the candidates are the keys whose validity window covers the signature's timestamp, plus every `revoked` key whatever its window, so that a revoked key's signature reaches the status check (step 4); a revoked key is never accepted. The timestamp only narrows the candidates; it never selects a key by itself. For objects whose `kid` is defined by another specification (such as a delegation token's DID-derived JOSE header `kid`, Spec 01), that `kid` is not a key-set identifier: the verifier treats it as absent and uses the object's issued-at time.
 2. **Key-set entry check.** For each candidate, the verifier recomputes the RFC 7638 JWK SHA-256 thumbprint from the entry's public key members. If it does not equal the entry's `kid`, the entry is rejected and reported as **key-set mismatch**; it is never used.
 3. **Cryptographic verification.** The verifier verifies the signature over the reconstructed signed payload (§4.3, §10.2) with the candidate's public key. With `kid` present, failure is **invalid signature**. Without `kid`, only a candidate whose key actually verifies the signature is selected; if none does, the result is **invalid signature**.
-4. **Full validity window.** The signature's timestamp MUST NOT be before the selected key's `agf_not_before` (when present) and MUST NOT be after its `agf_not_after` (when present). Otherwise the result is **outside key validity**, even though the signature verified.
-5. **Status.** A signature by a `revoked` key is never silently accepted. The signing timestamp is asserted by the signer, so a compromised key can backdate; such signatures are reported as **revoked key** regardless of timestamp, and any acceptance requires evidence outside the artifact.
+4. **Status.** A signature by a `revoked` key is never silently accepted. The signing timestamp is asserted by the signer, so a compromised key can backdate; such signatures are reported as **revoked key** regardless of timestamp, and any acceptance requires evidence outside the artifact. Status is checked only after the signature verified under that key (step 3), and before the validity window (step 5).
+5. **Full validity window.** The signature's timestamp MUST NOT be before the selected key's `agf_not_before` (when present) and MUST NOT be after its `agf_not_after` (when present). Otherwise the result is **outside key validity**, even though the signature verified.
 
 ## 5. Storage
 
@@ -466,3 +466,4 @@ Receipt verification runs through `POST /v1/audit/verify` (§6.3.1), which check
 | 0.2.0 | 2026-07-15 | Added §10 Execution Receipts (kernel Receipt serialization: format, closed signed payload, gateway emission rules, lifecycle) and §6.3.1 two-stage verification with structured violation codes (EXECUTED_AFTER_DENY, EXECUTED_WITHOUT_APPROVAL, RECEIPT_WITHOUT_DECISION, RECEIPT_SIGNATURE_INVALID, POLICY_VERSION_MISMATCH, PARENT_REVOKED); Change Log renumbered §10→§11 |
 | 0.3.0 | 2026-09-29 | Added §4.5 Key Publication and Selection: `kid` (RFC 7638 thumbprint) on ES256 signature blocks, outside the signed payload; unauthenticated JWKS at `/.well-known/jwks.json` with `agf_status`/`agf_not_before`/`agf_not_after` and retained retired keys; verifier key-selection rules — thumbprint recomputation, cryptographic verification with the selected key, full `agf_not_before`/`agf_not_after` window, revoked status; unknown key, key-set mismatch, invalid signature, outside key validity and revoked key reported distinctly; key set covers every PDP-signed object; key-set changes are explicit operator actions and a PDP fails closed on a key mismatch; explicit exception to Spec 09 §5.2 step 6 for evidence-signing keys; signer identity changes (`agf_previous_signers` plus a single HTTPS redirect from the earlier origin's key-set path, exact normalized-origin comparison, both required; reported as live-origin verification, not historical attestation). `kid` added to §3.1 and §10.1 examples, §10.1 field table, §10.2 |
 | 0.3.1 | 2026-09-29 | §2: what the decision artifact proves is bounded by Spec 00 §1.1 (scope boundary) |
+| 0.3.2 | 2026-09-30 | §4.5 key selection: status (revoked key) is checked before the validity window, and after cryptographic verification, so a revoked key's signature is reported as revoked regardless of timestamp; without a `kid`, revoked keys remain candidates whatever their window, so that case reaches the status check. Steps 4 and 5 swapped; no change to what is accepted |
