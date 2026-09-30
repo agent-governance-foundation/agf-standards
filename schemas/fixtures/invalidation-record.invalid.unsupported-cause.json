@@ -1,0 +1,27 @@
+{
+  "payload": {
+    "record_type": "agf.invalidation",
+    "format_version": "1.0",
+    "record_id": "inv_1790758000_c4d9e1",
+    "org_id": "3f2b1c4e-0000-4000-8000-000000000001",
+    "recorded_at": 1790758000,
+    "subject": "del_0123456789abcdef",
+    "subject_type": "authority",
+    "cause": "expired",
+    "occurred_at": 1790758000,
+    "detected_at": 1790758000,
+    "actor": "system:runbook",
+    "authorization_mode": null,
+    "reason": {
+      "alg": "HMAC-SHA256-SALT16",
+      "value": "GecrzUwdDF_wfQsY_k-Cn1Bn-g_2pZGDBFXDqBNL3N8"
+    },
+    "evidence": null
+  },
+  "signature": {
+    "signer": "https://pdp.example.org",
+    "algorithm": "ES256",
+    "kid": "fhXP-sWpcCYlyWFLLDV8IFicJdwqNz37956kLJBGakI",
+    "signature": "MEUCIQDexampleOnlyNotAValidSignature"
+  }
+}

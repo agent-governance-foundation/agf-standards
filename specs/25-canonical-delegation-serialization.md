@@ -1,6 +1,6 @@
 # Specification 25: Canonical Delegation Serialization (AGF-C14N-1.0)
 
-**Version:** 0.1.0 (Draft)
+**Version:** 0.2.0 (Draft)
 **Status:** Working Draft  
 **Supersedes:** None  
 **Layer:** Core format  
@@ -19,6 +19,19 @@ Spec 24's Trust Summary needs two things a raw delegation chain doesn't provide 
 4. **Floats are rejected**, not coerced — `canonicalize()` raises `TypeError` on any `float` value anywhere in the input (including `NaN`/`Infinity`, which are `float` instances in Python), rather than silently producing output whose numeric formatting isn't portable across implementations. Every field this protocol canonicalizes is an integer, string, boolean, or array/object of those — a float appearing anywhere is a schema violation, not an edge case to handle gracefully.
 
 This is a smaller surface than full RFC 8785 (which also defines ECMAScript-compatible float formatting) precisely because this protocol's schemas never need floats — implementing that part of RFC 8785 would be complexity with no corresponding requirement.
+
+### 2.1 AGF-C14N-1.0 — observable behaviour, stated precisely
+
+The rules above are `AGF-C14N-1.0`. For independent implementations, its output is additionally characterized as follows. This describes behaviour already produced; it adds **no** new constraint, so every object signed or hashed under 1.0 keeps verifying:
+
+- `null` is permitted as a value.
+- Object keys are sorted by Unicode code point.
+- Strings escape `"` and `\` as `\"` and `\\`; U+0008, U+0009, U+000A, U+000C, U+000D as `\b \t \n \f \r`; every other code point below U+0020 and every non-ASCII code point as `\uXXXX` with lowercase hexadecimal digits, code points above U+FFFF as a UTF-16 surrogate pair. The output is therefore ASCII.
+- Integers are written in decimal without a range restriction.
+
+### 2.2 AGF-C14N-1.1
+
+`AGF-C14N-1.1` is `AGF-C14N-1.0` (§2, §2.1) with one added restriction: **integers MUST be within ±(2^53 − 1)**; input outside that range is rejected. For in-range input the output is byte-identical to 1.0. Input with duplicate object keys MUST be rejected when parsed. A format declares which version it uses; Spec 07 §11 signed evidence records use 1.1. Formats already defined on 1.0 (this specification's chain hash and signing input, Spec 26) are unchanged.
 
 ## 3. Chain Hash
 
@@ -50,3 +63,4 @@ Spec 24 §4's ES256 signature covers `canonicalize(summary_without_signature_fie
 | Version | Date | Changes |
 |---------|------|---------|
 | 0.1.0 | 2026-07-12 | Initial public working draft |
+| 0.2.0 | 2026-09-30 | §2.1 states `AGF-C14N-1.0`'s observable behaviour precisely (null, key order, string escaping, integers) without adding constraints; §2.2 adds `AGF-C14N-1.1` (1.0 plus an integer range of ±(2^53 − 1)), used by Spec 07 §11 |

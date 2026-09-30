@@ -1,0 +1,23 @@
+{
+  "payload": {
+    "record_type": "agf.approval_attestation",
+    "format_version": "1.0",
+    "record_id": "apa_1790757900_7e1f2a",
+    "org_id": "3f2b1c4e-0000-4000-8000-000000000001",
+    "recorded_at": 1790757900,
+    "approval_request_id": "apr_1790756883_b0ef27",
+    "request_record_digest": "MFxdvs94xVQV08O3D4XxjiN8BA151RN0v1ymuq5Ebaw",
+    "decision_ref": "dec_1790756883_d4e59c",
+    "outcome": "approved",
+    "decided_by": "7a1e3c2d-0000-4000-8000-000000000003",
+    "decided_at": 1790757899,
+    "role_required": "admin",
+    "comments": "Approved after call with finance"
+  },
+  "signature": {
+    "signer": "https://pdp.example.org",
+    "algorithm": "ES256",
+    "kid": "fhXP-sWpcCYlyWFLLDV8IFicJdwqNz37956kLJBGakI",
+    "signature": "MEUCIQDexampleOnlyNotAValidSignature"
+  }
+}

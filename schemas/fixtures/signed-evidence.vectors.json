@@ -1,0 +1,88 @@
+{
+  "description": "Spec 07 §11.2 / Spec 25 §2.2 test vectors. The salt is fixed (bytes 0x00..0x0f) for reproducibility only; real salts MUST be fresh and random.",
+  "salted_digests": [
+    {
+      "salt_b64url": "AAECAwQFBgcICQoLDA0ODw",
+      "input_utf8": "Approved after call with finance",
+      "expected": "D_pOcRmuNDoh_o2HaYvuEVUNbNoRA8SHToCtN11aWDs"
+    },
+    {
+      "salt_b64url": "AAECAwQFBgcICQoLDA0ODw",
+      "input_utf8": "ok",
+      "expected": "fadj4yUCgenFgsAzlL-wFOyImSv0Ruv-cX8FGUGW5o8"
+    },
+    {
+      "salt_b64url": "AAECAwQFBgcICQoLDA0ODw",
+      "input_utf8": "Zahlung genehmigt — Übergabe an Buchhaltung",
+      "expected": "lf0a5XcS_C69U46HWxIoncyBtBJ6cMzzkeA_bVofvCY"
+    }
+  ],
+  "canonicalization": [
+    {
+      "input": {
+        "b": 1,
+        "a": "é\u0001\n\"\\ /",
+        "z": null,
+        "k": "😀",
+        "A": true
+      },
+      "expected_ascii": "{\"A\":true,\"a\":\"\\u00e9\\u0001\\n\\\"\\\\ /\",\"b\":1,\"k\":\"\\ud83d\\ude00\",\"z\":null}",
+      "expected_sha256_b64url": "bswp4ZnMugmLnh5OKl2OYTXEOarBjsVSvwfGlBmpR2s"
+    },
+    {
+      "input": {
+        "record_type": "agf.approval_request",
+        "format_version": "1.0",
+        "record_id": "apr_1790756883_b0ef27",
+        "org_id": "3f2b1c4e-0000-4000-8000-000000000001",
+        "recorded_at": 1790756884,
+        "approval_request_id": "apr_1790756883_b0ef27",
+        "decision_ref": "dec_1790756883_d4e59c",
+        "agent_id": "did:agf:example:agent:reporting",
+        "requestor": "5d0c9a7e-0000-4000-8000-000000000002",
+        "role_required": "admin",
+        "created_at": 1790756883,
+        "timeout_policy": {
+          "timeout_seconds": 3600,
+          "escalation_chain": [
+            {
+              "role": "owner",
+              "timeout_seconds": 7200
+            }
+          ],
+          "final_timeout_action": "CONTINUE_WITH_CAUTION"
+        },
+        "timeout_policy_source": "org_config"
+      },
+      "expected_ascii": "{\"agent_id\":\"did:agf:example:agent:reporting\",\"approval_request_id\":\"apr_1790756883_b0ef27\",\"created_at\":1790756883,\"decision_ref\":\"dec_1790756883_d4e59c\",\"format_version\":\"1.0\",\"org_id\":\"3f2b1c4e-0000-4000-8000-000000000001\",\"record_id\":\"apr_1790756883_b0ef27\",\"record_type\":\"agf.approval_request\",\"recorded_at\":1790756884,\"requestor\":\"5d0c9a7e-0000-4000-8000-000000000002\",\"role_required\":\"admin\",\"timeout_policy\":{\"escalation_chain\":[{\"role\":\"owner\",\"timeout_seconds\":7200}],\"final_timeout_action\":\"CONTINUE_WITH_CAUTION\",\"timeout_seconds\":3600},\"timeout_policy_source\":\"org_config\"}",
+      "expected_sha256_b64url": "MFxdvs94xVQV08O3D4XxjiN8BA151RN0v1ymuq5Ebaw"
+    }
+  ],
+  "request_record_digest": {
+    "approval_request_payload": {
+      "record_type": "agf.approval_request",
+      "format_version": "1.0",
+      "record_id": "apr_1790756883_b0ef27",
+      "org_id": "3f2b1c4e-0000-4000-8000-000000000001",
+      "recorded_at": 1790756884,
+      "approval_request_id": "apr_1790756883_b0ef27",
+      "decision_ref": "dec_1790756883_d4e59c",
+      "agent_id": "did:agf:example:agent:reporting",
+      "requestor": "5d0c9a7e-0000-4000-8000-000000000002",
+      "role_required": "admin",
+      "created_at": 1790756883,
+      "timeout_policy": {
+        "timeout_seconds": 3600,
+        "escalation_chain": [
+          {
+            "role": "owner",
+            "timeout_seconds": 7200
+          }
+        ],
+        "final_timeout_action": "CONTINUE_WITH_CAUTION"
+      },
+      "timeout_policy_source": "org_config"
+    },
+    "expected": "MFxdvs94xVQV08O3D4XxjiN8BA151RN0v1ymuq5Ebaw"
+  }
+}

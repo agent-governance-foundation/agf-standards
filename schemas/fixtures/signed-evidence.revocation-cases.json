@@ -1,0 +1,79 @@
+{
+  "description": "Spec 07 \u00a711.8 revocation classification cases for one jti of a Decision with timestamp decision_ts. Each Invalidation is assumed verified and bound to the verifying organisation. Expected per-jti result: status and code.",
+  "decision_ts": 1790756883,
+  "cases": [
+    {
+      "name": "revoked before decision, detected by then",
+      "invalidations": [
+        {
+          "occurred_at": 1790756823,
+          "detected_at": 1790756823
+        }
+      ],
+      "expected": {
+        "status": "violation",
+        "code": "PARENT_REVOKED"
+      }
+    },
+    {
+      "name": "revoked before decision, detected after it (delayed detection)",
+      "invalidations": [
+        {
+          "occurred_at": 1790756823,
+          "detected_at": 1790756913
+        }
+      ],
+      "expected": {
+        "status": "violation",
+        "code": "REVOCATION_DETECTED_AFTER_DECISION"
+      }
+    },
+    {
+      "name": "revoked after decision (ordinary later revocation)",
+      "invalidations": [
+        {
+          "occurred_at": 1790756943,
+          "detected_at": 1790756943
+        }
+      ],
+      "expected": {
+        "status": "verified",
+        "code": "REVOKED_AFTER_DECISION"
+      }
+    },
+    {
+      "name": "revoked after decision, detected much later",
+      "invalidations": [
+        {
+          "occurred_at": 1790756943,
+          "detected_at": 1790760483
+        }
+      ],
+      "expected": {
+        "status": "verified",
+        "code": "REVOKED_AFTER_DECISION"
+      }
+    },
+    {
+      "name": "revoked exactly at decision time",
+      "invalidations": [
+        {
+          "occurred_at": 1790756883,
+          "detected_at": 1790756883
+        }
+      ],
+      "expected": {
+        "status": "verified",
+        "code": "REVOKED_AFTER_DECISION"
+      }
+    },
+    {
+      "name": "no Invalidation record",
+      "invalidations": [],
+      "expected": {
+        "status": "not_established",
+        "code": "REVOCATION_STATUS_UNESTABLISHED"
+      }
+    }
+  ]
+}

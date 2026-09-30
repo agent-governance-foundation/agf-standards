@@ -1,0 +1,23 @@
+{
+  "payload": {
+    "record_type": "agf.execution_validation",
+    "format_version": "1.0",
+    "record_id": "9b1f0c52-7d1e-4e88-9a41-2f6d3c1b0e77",
+    "org_id": "3f2b1c4e-0000-4000-8000-000000000001",
+    "recorded_at": 1790758100,
+    "decision_ref": "dec_1790756883_d4e59c",
+    "authority_refs_checked": [
+      "del_0123456789abcdef"
+    ],
+    "checked_at": 1790758100,
+    "result": "valid",
+    "invalidation_refs": [],
+    "checked_by": "did:agf:example:gateway-http"
+  },
+  "signature": {
+    "signer": "https://pdp.example.org",
+    "algorithm": "ES256",
+    "kid": "fhXP-sWpcCYlyWFLLDV8IFicJdwqNz37956kLJBGakI",
+    "signature": "MEUCIQDexampleOnlyNotAValidSignature"
+  }
+}

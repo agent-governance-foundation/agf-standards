@@ -1,0 +1,32 @@
+{
+  "payload": {
+    "record_type": "agf.approval_request",
+    "format_version": "1.0",
+    "record_id": "apr_1790756883_b0ef27",
+    "org_id": "3f2b1c4e-0000-4000-8000-000000000001",
+    "recorded_at": 1790756884,
+    "approval_request_id": "apr_1790756883_b0ef27",
+    "decision_ref": "dec_1790756883_d4e59c",
+    "agent_id": "did:agf:example:agent:reporting",
+    "requestor": "5d0c9a7e-0000-4000-8000-000000000002",
+    "role_required": "admin",
+    "created_at": 1790756883,
+    "timeout_policy": {
+      "timeout_seconds": 3600.5,
+      "escalation_chain": [
+        {
+          "role": "owner",
+          "timeout_seconds": 7200
+        }
+      ],
+      "final_timeout_action": "CONTINUE_WITH_CAUTION"
+    },
+    "timeout_policy_source": "org_config"
+  },
+  "signature": {
+    "signer": "https://pdp.example.org",
+    "algorithm": "ES256",
+    "kid": "fhXP-sWpcCYlyWFLLDV8IFicJdwqNz37956kLJBGakI",
+    "signature": "MEUCIQDexampleOnlyNotAValidSignature"
+  }
+}

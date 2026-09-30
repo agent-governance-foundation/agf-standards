@@ -1,8 +1,8 @@
 # Specification 07: Audit Trail and Decision Provenance
 
-**Version:** 0.3.2 (Draft)  
+**Version:** 0.4.0 (Draft)  
 **Status:** Working Draft  
-**Supersedes:** 0.3.1  
+**Supersedes:** 0.3.2  
 **Layer:** Core format  
 
 ## 1. Introduction
@@ -302,13 +302,13 @@ Semantic checks run only when the cryptographic stage passes, and cover the arti
 | Code | Meaning |
 |------|---------|
 | `EXECUTED_AFTER_DENY` | A signature-valid Receipt records `outcome: executed` for a Decision whose `response.decision` is `DENY` (KERNEL-NEG-05, Spec 00 §6) |
-| `EXECUTED_WITHOUT_APPROVAL` | As above for `REVIEW_REQUIRED` with no approved approval request linked to the Decision |
+| `EXECUTED_WITHOUT_APPROVAL` | As above for `REVIEW_REQUIRED`, evaluated on signed evidence records per §11.8 |
 | `RECEIPT_WITHOUT_DECISION` | A Receipt references a `decision_ref` that does not resolve to a stored Decision artifact |
 | `RECEIPT_SIGNATURE_INVALID` | A correlated Receipt's signature fails verification (does not affect the artifact's own `signature_valid`) |
 | `POLICY_VERSION_MISMATCH` | The policy block records a requested-but-missing version (`used_version: null`) yet the response decision is an uncapped `ALLOW` — inconsistent with Spec 06 §6.5 |
-| `PARENT_REVOKED` | A delegation in the decided chain was revoked **before** the decision timestamp. A revocation made after the decision is not a violation — validity is evaluated at decision time (Spec 00 §5) — and continues to surface only through `revocation_state` |
+| `PARENT_REVOKED` | A delegation in the decided chain was revoked **before** the decision timestamp (evaluated on signed Invalidation records per §11.8). A revocation made after the decision is not a violation — validity is evaluated at decision time (Spec 00 §5) — and continues to surface only through `revocation_state` |
 
-`semantic_valid` is true when no violations are found. A semantic violation never retroactively falsifies signatures; it means the signed evidence itself proves an enforcement or consistency failure.
+Semantic checks are evaluated **only** on signed evidence: the Decision artifact, correlated Receipts (§10), and signed evidence records (§11). They MUST NOT fall back to unsigned or editable storage (for example, database rows recording an approval status or a revocation). Each applicable check reports one status — `verified`, `violation`, `not_established` or `not_applicable` (§11.8). Evidence that is missing, not verified, unsigned (legacy or new) or erased yields `not_established` for the check that needs it — never `verified`, and never a violation on its own. `semantic_valid` is true **only when every applicable check is `verified`**; a `violation` or a `not_established` makes it false. A semantic violation never retroactively falsifies signatures; it means the signed evidence itself proves an enforcement or consistency failure. §11.8 adds the codes `APPROVAL_AFTER_EXECUTION_VALIDATION`, `EXECUTED_AFTER_FAILED_VALIDATION`, `REVOCATION_DETECTED_AFTER_DECISION`, `APPROVAL_STATUS_UNESTABLISHED`, `EXECUTION_VALIDATION_UNESTABLISHED`, `REVOCATION_STATUS_UNESTABLISHED`, `EVIDENCE_ERASED`, the `*_UNSIGNED` / `*_UNSIGNED_LEGACY` reasons, and the informational flags `CONTINUED_BY_TIMEOUT_POLICY` and `REVOKED_AFTER_DECISION`.
 
 ## 7. Audit Requirements by Regulation
 
@@ -327,6 +327,8 @@ Semantic checks run only when the cryptographic stage passes, and cover the arti
 2. Store the data key separately (e.g., in a KMS)
 3. To "delete": destroy the data key, making the artifact permanently unreadable
 4. The encrypted artifact may remain in storage but is cryptographically inaccessible
+
+Signed evidence records (§11) are in scope of these requirements; §11.10 states how erasure applies to them.
 
 ## 8. Example: Complete Audit Workflow
 
@@ -457,7 +459,177 @@ A blocked call's receipt is the affirmative evidence of enforcement — emitting
 
 Receipt verification runs through `POST /v1/audit/verify` (§6.3.1), which checks receipt signatures and the receipt-vs-decision semantics together.
 
-## 11. Change Log
+## 11. Signed Evidence Records
+
+Decisions (§3) and Receipts (§10) are signed. Four further facts that verification depends on — that a human review was requested, how it ended, that an Authority was revoked, and what an execution-time check found — are serialized here as **signed evidence records**, so that verification does not rest on mutable storage. Each is signed by the PDP with a key from its published key set (§4.5).
+
+| `record_type` | Emitted when | Schema |
+|---|---|---|
+| `agf.approval_request` | a Decision is `REVIEW_REQUIRED` and a human review request is created | `schemas/approval-request-record.schema.json` |
+| `agf.approval_attestation` | a review request reaches a terminal outcome | `schemas/approval-attestation-record.schema.json` |
+| `agf.invalidation` | an Authority is revoked — one record per revoked Authority, including each descendant cut by a branch revocation (Spec 05) | `schemas/invalidation-record.schema.json` |
+| `agf.execution_validation` | an execution-time check runs (Spec 30 §4) | `schemas/execution-validation-signed-record.schema.json` |
+
+### 11.1 Record Envelope
+
+A signed evidence record is a JSON document with two members:
+
+```json
+{
+  "payload": { "record_type": "agf.approval_attestation", "format_version": "1.0", "...": "..." },
+  "signature": { "signer": "https://pdp.acme.com", "algorithm": "ES256", "kid": "NzbLsXh8uDCcd-6MNwXF4W_7noWXFZAfHkxZsRGC9Xs", "signature": "base64url..." }
+}
+```
+
+The signature covers exactly the canonical bytes of `payload` (§11.2). The `signature` member is outside the signed bytes; its members follow §4.2 and §4.5 (`kid` is a key-selection hint, not evidence).
+
+Every `payload` contains these fields, always present:
+
+| Field | Meaning |
+|---|---|
+| `record_type` | One of the four values above. **A verifier MUST check that `record_type` equals the type it expects before accepting a signature**, so a signature over one record type can never be read as another. Decision and Receipt payloads (§4.3, §10.2) carry no `record_type` member, so no signed evidence record can validate as either. |
+| `format_version` | `"1.0"` for this version. A verifier MUST reject a version it does not implement. |
+| `record_id` | Unique id. For `agf.approval_request` it equals `approval_request_id`; for `agf.execution_validation` it is the Execution Validation Record's existing `id` (Spec 30 §4), since Receipts already reference that value (§10.1 `execution_validation_ref`). |
+| `org_id` | The organisation the record belongs to, or `null` where the implementation has none. Records whose binding rules (§11.8) compare `org_id` cannot satisfy them with `null`. |
+| `recorded_at` | Unix seconds at which the PDP recorded and signed the record. |
+
+Type-specific fields (§11.3–§11.6) are likewise always present, `null` when empty, so the signed shape never depends on configuration.
+
+**Two kinds of time.** `recorded_at` is the signing time. Type-specific fields carry **event** times (`created_at`, `decided_at`, `occurred_at`, `detected_at`, `checked_at`). Every event time in a payload MUST be less than or equal to its `recorded_at`; a verifier MUST reject a record that violates this. **Key selection (§4.5) uses `recorded_at`; the semantic rules (§11.8) use event times**, except where §11.8 states a rule on `recorded_at` explicitly.
+
+**Unsigned records.** An implementation that stores these facts before it emits signed records has **legacy** records with no signature; one that fails to sign a new record in the cases §11.7 permits has **unsigned** new records. A verifier MUST report the two distinctly (`*_UNSIGNED_LEGACY` / `*_UNSIGNED`) and MUST NOT treat either as cryptographically verified. An implementation MUST NOT sign a record long after the event it attests — a signature asserts what the PDP recorded at `recorded_at`, not a reconstruction of past state.
+
+### 11.2 Canonicalization and Salted Digests
+
+**Canonicalization.** The signing input is the payload serialized under **`AGF-C14N-1.1`** (Spec 25 §2.2), which `format_version` `"1.0"` of every record type in this section implies. `AGF-C14N-1.1` adds one restriction to `AGF-C14N-1.0` — integers outside ±(2^53 − 1) are rejected — and is otherwise byte-identical. Objects signed under `AGF-C14N-1.0` (Spec 25, Spec 26) are unaffected and continue to verify under 1.0.
+
+**Salted digests.** Free-text and structured fields that may carry personal data enter a payload only as a salted digest:
+
+- **Salt:** 16 bytes from a cryptographically secure random source, **fresh for each field of each record**. Stored with the plaintext by the implementation; never part of the payload.
+- **Input:** for a text field, the exact UTF-8 bytes of the stored string, with no normalization; for a JSON field, its `AGF-C14N-1.1` bytes.
+- **Digest:** `HMAC-SHA256(key = salt, message = input)`, base64url-encoded without padding (43 characters).
+- **Payload value:** `{"alg": "HMAC-SHA256-SALT16", "value": "<digest>"}`, or `null` when the field is empty.
+
+A party given the plaintext and its salt can recompute the digest. A party holding only the record cannot confirm guesses about the plaintext. This reduces disclosure; it does not anonymize (§11.10).
+
+### 11.3 Approval Request Record (`agf.approval_request`)
+
+Emitted when a review request is created, in the same transaction.
+
+| Field | Meaning |
+|---|---|
+| `approval_request_id` | The request's id |
+| `decision_ref` | `artifact_id` of the `REVIEW_REQUIRED` Decision |
+| `agent_id` | The acting agent |
+| `requestor` | The principal whose call triggered the review (a user id, or the organisation id when no user was involved), so that separation of duties is checkable |
+| `role_required` | The role initially required to decide |
+| `created_at` | Event time the request was created |
+| `timeout_policy` | `{timeout_seconds, escalation_chain, final_timeout_action}` — the timeout rule **applied to this request**, where `escalation_chain` is an ordered list of `{role, timeout_seconds}` and `final_timeout_action` is `DENY`, `CONTINUE_WITH_CAUTION`, or `RETRY` |
+| `timeout_policy_source` | `org_config` when the rule came from an explicit organisation setting; `default` when no setting applied (including a failed lookup), in which case `final_timeout_action` is `DENY` |
+
+The timeout rule may be unversioned configuration rather than a versioned policy (Spec 06). This record signs the values applied and their source at the moment they were chosen; it does not prove the configuration's history.
+
+### 11.4 Approval Attestation (`agf.approval_attestation`)
+
+Emitted exactly once when a review request reaches a terminal outcome, in the same transaction. Intermediate escalation steps are not terminal and emit no attestation.
+
+**What it claims:** the PDP attests that, at `decided_at`, the principal `decided_by` recorded `outcome` for the request. This is **PDP attestation, not non-repudiation by the approver**: approvers hold no signing key, so a party controlling the PDP's signing key could produce an attestation no human made.
+
+| Field | Meaning |
+|---|---|
+| `approval_request_id` | The request |
+| `request_record_digest` | base64url (unpadded) SHA-256 of the **signed payload bytes** of the request's `agf.approval_request` record — binding this attestation to exactly one creation record |
+| `decision_ref` | Equal to the creation record's `decision_ref` |
+| `outcome` | `approved` or `denied` (a human decision); `timeout` (escalation exhausted, final action `DENY`); `continued_by_timeout_policy` (escalation exhausted, final action `CONTINUE_WITH_CAUTION` — **not an approval**); `escalated` (a terminal escalation where the implementation supports one) |
+| `decided_by` | The deciding user's id, or `system:timeout`, `system:continue_with_caution`, `system:escalated` for system outcomes |
+| `decided_at` | Event time of the outcome |
+| `role_required` | The role required at the moment of decision |
+| `comments` | Salted digest (§11.2) of the decider's comment, or `null` |
+
+### 11.5 Invalidation Record (`agf.invalidation`)
+
+The signed AGF serialization of the kernel Invalidation (Spec 00 §3.6), reusing its fields. Emitted for each revoked Authority, in the same transaction as the revocation.
+
+| Field | Meaning |
+|---|---|
+| `subject` | The revoked Authority's `id` (token `jti`) |
+| `subject_type` | `authority` |
+| `cause` | `revoked` (format version `1.0` covers revocation only) |
+| `occurred_at` | Event time the revocation took effect |
+| `detected_at` | Event time the implementation recorded it as queryable by enforcement (Spec 00 §7.2) |
+| `actor` | The revoking principal's id; for system-initiated revocations, `system:<component>`. Never `null`: Spec 00 §3.6 requires `actor` when `cause` is `revoked`. |
+| `authorization_mode` | How the revocation was authorized (Spec 05), or `null` |
+| `reason`, `evidence` | Salted digests (§11.2), or `null` |
+
+The Authorities a Decision relied on are identified from the `jti` of each token in the Decision's `request.delegation_chain`, which is inside the Decision's signed evidence payload (§4.3). No change to the Decision format is needed to match Invalidation records against a Decision.
+
+### 11.6 Signed Execution Validation Record (`agf.execution_validation`)
+
+The Execution Validation Record of Spec 30 §4, signed. Emitted in the same transaction as the record. The payload's type-specific fields are exactly Spec 30 §4's `decision_ref`, `authority_refs_checked`, `checked_at` (event time), `result`, `reasons`, `invalidation_refs`, and `checked_by`; `record_id` carries its `id`.
+
+### 11.7 Recording Guarantees
+
+A record is signed before, and inserted in the same transaction as, the fact it records, so a committed fact and its record persist together. When **signing itself** fails, the safe direction differs by type:
+
+| Type | If signing fails | Effect on verification |
+|---|---|---|
+| `agf.approval_request` | The review request is still created; the failure is logged and counted | Operationally the request can still be decided. As evidence, every approval result for it is `not_established` (`creation_record_unsigned`), and `continued_by_timeout_policy` can never justify execution (§11.8) |
+| `agf.approval_attestation` | The transition MUST fail; the request stays pending | None |
+| `agf.invalidation` | The revocation MUST still take effect; the record is stored unsigned, logged and counted | `INVALIDATION_UNSIGNED`; revocation status for that Authority is not established |
+| `agf.execution_validation` | The check's result MUST stand; the record is stored unsigned, logged and counted | `EXECUTION_VALIDATION_UNSIGNED` |
+
+Signatures make later modification **detectable**, not impossible. A deleted record is detectable only as absence (§11.9).
+
+### 11.8 Verification Rules
+
+Each record is verified by checking `record_type` and `format_version`, the event-time invariant (§11.1), and its signature through §4.5 key selection using `recorded_at`. A record that fails any step is **not verified** and can support neither a clean result nor a violation.
+
+Each semantic check reports one status: **`verified`**, **`violation`**, **`not_established`** (with a reason), or **`not_applicable`** (its precondition does not hold for the evidence presented). `not_applicable` is never counted as `verified`. These rules apply **unconditionally**: a check never falls back to unsigned or editable storage, and missing, unsigned or erased evidence yields `not_established`. `semantic_valid` (§6.3.1) is true only when every applicable check is `verified`; any `violation` or `not_established` makes it false.
+
+**Approval (`EXECUTED_WITHOUT_APPROVAL`).** Applies to a Receipt with `outcome: executed` for a Decision *D* whose decision is `REVIEW_REQUIRED`. Satisfied only when a verified approval request record *R*, a verified approval attestation *A*, and a verified signed execution validation record *V* exist such that:
+
+1. **Binding:** `A.request_record_digest` equals SHA-256 of *R*'s signed payload bytes; `A.approval_request_id = R.approval_request_id`; `A.decision_ref = R.decision_ref =` *D*'s `artifact_id`; `A.org_id = R.org_id`, non-null.
+2. **Execution-validation binding:** the Receipt's signed `execution_validation_ref` names *V*; `V.decision_ref =` *D*'s `artifact_id`; `V.org_id = A.org_id`.
+3. **Order:** *D*'s `timestamp` ≤ `R.created_at`; `R.recorded_at ≤ A.recorded_at`; `R.created_at ≤ A.decided_at`; and `A.recorded_at ≤ V.checked_at`. What this establishes is **approval (or a permitted timeout) established before execution validation** — nothing about when the call was actually dispatched, for which no signed evidence is defined.
+4. **Validation result:** `V.result = valid`.
+5. **Outcome:** `A.outcome = approved`; or `A.outcome = continued_by_timeout_policy` **only if** *R* is verified, `R.timeout_policy.final_timeout_action = CONTINUE_WITH_CAUTION`, `R.timeout_policy_source = org_config`, and `A.decided_at ≥ R.created_at + R.timeout_policy.timeout_seconds + Σ R.timeout_policy.escalation_chain[*].timeout_seconds`. The latter is reported with the informational flag `CONTINUED_BY_TIMEOUT_POLICY`.
+
+Results:
+- `violation` — `EXECUTED_WITHOUT_APPROVAL` when rules 1–2 hold and `A.outcome` is `denied` or `timeout`; `APPROVAL_AFTER_EXECUTION_VALIDATION` when rules 1–2 hold and `A.recorded_at > V.checked_at`.
+- `not_established` — `APPROVAL_STATUS_UNESTABLISHED` when *R* or *A* is missing, not verified, legacy-unsigned or unsigned (including a human approval whose *R* is unsigned: `creation_record_unsigned`), or bindings do not match; **approval timing not established** when the Receipt names no execution validation record, or *V* is missing, not verified, or bound to another Decision or organisation. A Receipt's `completed_at` does not substitute for *V*.
+
+**Execution validation (`EXECUTED_AFTER_FAILED_VALIDATION`).** Applies to every Receipt with `outcome: executed` whose signed `execution_validation_ref` names a record.
+- `violation` — *V* is verified, bound to the same Decision and organisation, and `V.result = invalid` (reported with `V.reasons`). Such a Receipt never receives a clean verdict, whatever other evidence says: a valid signature on *V* proves only that the `invalid` result is authentic.
+- `not_established` — `EXECUTION_VALIDATION_UNESTABLISHED` when the named record is missing, not verified, or bound elsewhere.
+- `not_applicable` — the Receipt names no record. This means **no execution validation is evidenced**; it does not prove the check never ran. For a `REVIEW_REQUIRED` Decision, approval timing remains `not_established`.
+
+**Revocation (`PARENT_REVOKED`, `REVOCATION_DETECTED_AFTER_DECISION`).** Applies to a Decision *D*. Validity is evaluated at decision time (Spec 00 §5). For each `jti` in *D*'s signed `request.delegation_chain`, consider the verified Invalidation records *I* with `I.subject = jti` and `I.org_id` equal to the organisation the verification is performed for (the Decision payload does not carry one):
+
+| Evidence for the `jti` | Status | Code |
+|---|---|---|
+| `I.occurred_at <` *D*`.timestamp` and `I.detected_at ≤` *D*`.timestamp` — revoked before the decision, and recorded as queryable by then | `violation` | `PARENT_REVOKED` |
+| `I.occurred_at <` *D*`.timestamp` and `I.detected_at >` *D*`.timestamp` — revoked before the decision, but not yet detected when it was made (**delayed detection**) | `violation` | `REVOCATION_DETECTED_AFTER_DECISION` |
+| every such *I* has `I.occurred_at ≥` *D*`.timestamp` — revoked **after** the decision | `verified` for this `jti` (not a violation) | informational `REVOKED_AFTER_DECISION` |
+| no verified Invalidation record | `not_established` | `REVOCATION_STATUS_UNESTABLISHED` |
+
+A revocation that took effect after the decision is never a violation, whatever its `detected_at`. `verified` with `REVOKED_AFTER_DECISION` establishes only that **each evidenced** revocation took effect at or after the decision; it does not establish a complete revocation history for the Authority (§11.9). **The absence of an Invalidation record never establishes that an Authority was not revoked** (§11.9), which is why the last row is `not_established` rather than `verified`. Decisions without a delegation chain (Spec 26 trust summaries) are `not_established`; verification whose outcome depends on revocation mechanisms not serialized here (Spec 28 chain-hash revocations) is reported as incomplete — never clean, never a violation. The check's overall status is `violation` if any `jti` is a violation, otherwise `not_established` if any `jti` is not established, otherwise `verified`.
+
+### 11.9 Completeness
+
+A signed record proves that an event happened. The absence of a record proves nothing. An append-only signed log would expose omissions only together with a trusted checkpoint of its head published or witnessed outside the PDP; without such an anchor, a party controlling the PDP could truncate or fork the log unnoticed. This version defines neither.
+
+### 11.10 Retention, Erasure and Privacy
+
+Signed evidence records are subject to the same retention (§5.2) and erasure (§7) requirements as the Decisions they refer to; there is no exemption for signed evidence, because pseudonymous identifiers can remain identifying.
+
+- Erasure of a Decision also erases the approval request records, approval attestations and signed execution validation records whose `decision_ref` is that Decision.
+- Erasure concerning a data subject erases records naming that subject.
+- Invalidation records are erased where their `actor` or `evidence` is personal data about the data subject; the fact that an Authority was revoked is retained for as long as the retention period requires.
+- An erased record keeps its non-identifying metadata (record type, timestamps) and is reported by verifiers as **unavailable** (`EVIDENCE_ERASED`) — never as unsigned or invalid. A check that depended on it is `not_established`.
+
+Salted digests reduce disclosure; they do not anonymize. Identifiers remain linkable to each other and, with access to the organisation's directory, to people. Signed evidence records are personal data wherever such links exist and require access control on every read path, the retention and erasure above, and export only to parties entitled to them.
+
+## 12. Change Log
 
 | Version | Date | Changes |
 |---------|------|---------|
@@ -467,3 +639,4 @@ Receipt verification runs through `POST /v1/audit/verify` (§6.3.1), which check
 | 0.3.0 | 2026-09-29 | Added §4.5 Key Publication and Selection: `kid` (RFC 7638 thumbprint) on ES256 signature blocks, outside the signed payload; unauthenticated JWKS at `/.well-known/jwks.json` with `agf_status`/`agf_not_before`/`agf_not_after` and retained retired keys; verifier key-selection rules — thumbprint recomputation, cryptographic verification with the selected key, full `agf_not_before`/`agf_not_after` window, revoked status; unknown key, key-set mismatch, invalid signature, outside key validity and revoked key reported distinctly; key set covers every PDP-signed object; key-set changes are explicit operator actions and a PDP fails closed on a key mismatch; explicit exception to Spec 09 §5.2 step 6 for evidence-signing keys; signer identity changes (`agf_previous_signers` plus a single HTTPS redirect from the earlier origin's key-set path, exact normalized-origin comparison, both required; reported as live-origin verification, not historical attestation). `kid` added to §3.1 and §10.1 examples, §10.1 field table, §10.2 |
 | 0.3.1 | 2026-09-29 | §2: what the decision artifact proves is bounded by Spec 00 §1.1 (scope boundary) |
 | 0.3.2 | 2026-09-30 | §4.5 key selection: status (revoked key) is checked before the validity window, and after cryptographic verification, so a revoked key's signature is reported as revoked regardless of timestamp; without a `kid`, revoked keys remain candidates whatever their window, so that case reaches the status check. Steps 4 and 5 swapped; no change to what is accepted |
+| 0.4.0 | 2026-09-30 | Added §11 Signed Evidence Records: common envelope (`record_type`, `format_version`, `record_id`, `org_id`, `recorded_at`) with domain separation and recording vs event time; `AGF-C14N-1.1` signing input and salted HMAC-SHA256 digests; approval request record, approval attestation (PDP attestation, `continued_by_timeout_policy` distinct from approval), signed Invalidation (kernel serialization), signed Execution Validation Record; recording guarantees on signing failure; verification rules with `verified`/`violation`/`not_established`/`not_applicable` statuses, applied unconditionally with no fallback to unsigned storage (§6.3.1 updated accordingly), and new codes; revocation classified as pre-decision (`PARENT_REVOKED`), delayed detection (`REVOCATION_DETECTED_AFTER_DECISION`) or post-decision (not a violation); completeness limitation; retention/erasure coverage. §6.3.1 and §7 point to §11. Change Log renumbered §11→§12 |

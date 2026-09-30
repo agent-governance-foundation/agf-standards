@@ -1,0 +1,165 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-governance-foundation.github.io/agf-standards/schemas/approval-attestation-record.schema.json",
+  "title": "Approval Attestation (signed evidence)",
+  "description": "Spec 07 \u00a711.4 \u2014 PDP attestation of a review request's terminal outcome; not non-repudiation by the approver. Schema checks structure only; the event-time invariant, bindings and ordering are semantic rules (Spec 07 \u00a711.1, \u00a711.8) enforced by verifiers.",
+  "type": "object",
+  "properties": {
+    "payload": {
+      "type": "object",
+      "properties": {
+        "record_type": {
+          "const": "agf.approval_attestation"
+        },
+        "format_version": {
+          "const": "1.0"
+        },
+        "record_id": {
+          "type": "string",
+          "pattern": "^apa_[A-Za-z0-9_]+$"
+        },
+        "org_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "recorded_at": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "approval_request_id": {
+          "type": "string",
+          "pattern": "^apr_[A-Za-z0-9_]+$"
+        },
+        "request_record_digest": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{43}$",
+          "description": "base64url SHA-256 of the approval request record's signed payload bytes."
+        },
+        "decision_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "outcome": {
+          "enum": [
+            "approved",
+            "denied",
+            "timeout",
+            "continued_by_timeout_policy",
+            "escalated"
+          ]
+        },
+        "decided_by": {
+          "type": "string",
+          "minLength": 1
+        },
+        "decided_at": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "role_required": {
+          "type": "string",
+          "minLength": 1
+        },
+        "comments": {
+          "description": "Salted digest (Spec 07 \u00a711.2), or null when the field is empty.",
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "alg": {
+                  "const": "HMAC-SHA256-SALT16"
+                },
+                "value": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9_-]{43}$"
+                }
+              },
+              "required": [
+                "alg",
+                "value"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        }
+      },
+      "required": [
+        "record_type",
+        "format_version",
+        "record_id",
+        "org_id",
+        "recorded_at",
+        "approval_request_id",
+        "request_record_digest",
+        "decision_ref",
+        "outcome",
+        "decided_by",
+        "decided_at",
+        "role_required",
+        "comments"
+      ],
+      "additionalProperties": false
+    },
+    "signature": {
+      "type": "object",
+      "description": "Outside the signed bytes (Spec 07 \u00a711.1, \u00a74.2, \u00a74.5).",
+      "properties": {
+        "signer": {
+          "type": "string",
+          "minLength": 1
+        },
+        "algorithm": {
+          "enum": [
+            "ES256",
+            "HMAC-SHA256"
+          ]
+        },
+        "kid": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "RFC 7638 thumbprint; required for ES256 (Spec 07 \u00a74.5)."
+        },
+        "signature": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]+={0,2}$"
+        }
+      },
+      "required": [
+        "signer",
+        "algorithm",
+        "kid",
+        "signature"
+      ],
+      "additionalProperties": false,
+      "if": {
+        "properties": {
+          "algorithm": {
+            "const": "ES256"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "kid": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{43}$"
+          }
+        }
+      }
+    }
+  },
+  "required": [
+    "payload",
+    "signature"
+  ],
+  "additionalProperties": false
+}

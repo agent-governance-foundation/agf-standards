@@ -1,6 +1,6 @@
 # Specification 30: Execution-Time Authorization Validation
 
-**Version:** 0.1.1 (Draft)  
+**Version:** 0.2.0 (Draft)  
 **Status:** Working Draft — §3-6 (the execution-time check, its API contract, and optional gateway
 integration) has a reference implementation, reachable both as a direct API call for custom Policy
 Enforcement Points and via at least one client SDK.  
@@ -109,6 +109,8 @@ was actually exercised, not skipped, which matters for the same reason Spec 00 �
 Receipt `unknown`-outcome rate as a monitored metric: a control that is never actually invoked
 provides no security benefit regardless of what this specification says about it.
 
+**Signing.** Each Execution Validation Record is also emitted as a signed evidence record (`agf.execution_validation`, Spec 07 §11.6), in the same transaction. If signing fails, the check's result stands and the record is stored unsigned (Spec 07 §11.7). An Execution Validation Record whose `result` is `invalid`, followed by an executed Receipt, is a violation (Spec 07 §11.8, `EXECUTED_AFTER_FAILED_VALIDATION`).
+
 ## 5. API Contract
 
 Per Spec 10 conventions (response envelope, `/v1/` versioning).
@@ -204,3 +206,4 @@ request lifecycle; it introduces no new trust anchors, signing keys, or write pa
 |---------|------|---------|
 | 0.1.0 | 2026-08-13 | Initial public working draft, per RFC 0000-execution-time-authorization-validation |
 | 0.1.1 | 2026-08-25 | §3-6 has a reference implementation, reachable directly and via at least one client SDK. |
+| 0.2.0 | 2026-09-30 | §4: Execution Validation Records are signed (Spec 07 §11.6); signing-failure behaviour and the executed-after-failed-validation rule referenced |

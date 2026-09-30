@@ -30,20 +30,42 @@ against its schema (falls back to a JSON well-formedness check if
 Non-kernel AGF artifacts that correlate to the kernel objects without extending
 them (Spec 00 §2's Core-format layer):
 
-| Schema | Source spec | Fixtures |
-|---|---|---|
-| [`execution-validation-record.schema.json`](execution-validation-record.schema.json) | Spec 30 §4 — Execution-Time Authorization Validation | [`fixtures/`](fixtures/) — `execution-validation-record.valid.json`, `execution-validation-record.invalid.json` |
+| Schema | Source spec |
+|---|---|
+| [`execution-validation-record.schema.json`](execution-validation-record.schema.json) | Spec 30 §4 — Execution Validation Record (unsigned form) |
+| [`approval-request-record.schema.json`](approval-request-record.schema.json) | Spec 07 §11.3 — signed Approval Request Record |
+| [`approval-attestation-record.schema.json`](approval-attestation-record.schema.json) | Spec 07 §11.4 — signed Approval Attestation |
+| [`invalidation-record.schema.json`](invalidation-record.schema.json) | Spec 07 §11.5 — signed Invalidation Record |
+| [`execution-validation-signed-record.schema.json`](execution-validation-signed-record.schema.json) | Spec 07 §11.6 — signed Execution Validation Record |
 
-Validate with `jsonschema` directly (no dedicated `check.py` yet for this
-single schema — see `kernel/check.py` for the pattern once more Core-format
-schemas land here):
+Each schema has a `fixtures/<name>.valid.json` and one or more
+`fixtures/<name>.invalid[.<reason>].json`, where `<reason>` names the one rule the
+fixture breaks. `check.py` validates them all:
 
-```python
-import json, jsonschema
-schema = json.load(open("execution-validation-record.schema.json"))
-doc = json.load(open("fixtures/execution-validation-record.valid.json"))
-jsonschema.Draft202012Validator(schema).validate(doc)
 ```
+pip install jsonschema
+python3 schemas/check.py
+```
+
+The signed-evidence schemas check **structure** only. The event-time invariant,
+bindings between records, ordering and every other rule in Spec 07 §11.8 are
+semantic rules that a verifier applies; a schema-valid record is not thereby
+verified. The `signature` values in the fixtures are placeholders, not valid
+signatures.
+
+`fixtures/signed-evidence.revocation-cases.json` lists revocation-classification
+cases for Spec 07 §11.8 (revoked before the decision, delayed detection, revoked after
+the decision, no record) with their expected status and code; `check.py` evaluates
+each against a reference classifier.
+
+`check.py` exits non-zero if `jsonschema` is not installed or a required data file is
+missing: a check that could not run is reported as a failure, never as a pass.
+
+`fixtures/signed-evidence.vectors.json` carries test vectors for `AGF-C14N-1.1`
+canonicalization (Spec 25 §2.2) and salted digests (Spec 07 §11.2), including
+non-ASCII and astral characters. `check.py` re-derives every vector from its input,
+so a wrong vector fails the check. The vector salt is fixed for reproducibility;
+real salts MUST be fresh and random.
 
 `execution-validation-record.invalid.json` fails because `result: "invalid"`
 is reported with no `reasons` — an invalid result with no stated cause defeats

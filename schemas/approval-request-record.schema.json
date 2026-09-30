@@ -1,0 +1,182 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-governance-foundation.github.io/agf-standards/schemas/approval-request-record.schema.json",
+  "title": "Approval Request Record (signed evidence)",
+  "description": "Spec 07 \u00a711.3 \u2014 signed when a human review request is created. Schema checks structure only; the event-time invariant, bindings and ordering are semantic rules (Spec 07 \u00a711.1, \u00a711.8) enforced by verifiers.",
+  "type": "object",
+  "properties": {
+    "payload": {
+      "type": "object",
+      "properties": {
+        "record_type": {
+          "const": "agf.approval_request"
+        },
+        "format_version": {
+          "const": "1.0"
+        },
+        "record_id": {
+          "type": "string",
+          "pattern": "^apr_[A-Za-z0-9_]+$"
+        },
+        "org_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "recorded_at": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "approval_request_id": {
+          "type": "string",
+          "pattern": "^apr_[A-Za-z0-9_]+$",
+          "description": "Equals record_id."
+        },
+        "decision_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "agent_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "requestor": {
+          "type": "string",
+          "minLength": 1
+        },
+        "role_required": {
+          "type": "string",
+          "minLength": 1
+        },
+        "created_at": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "timeout_policy": {
+          "type": "object",
+          "properties": {
+            "timeout_seconds": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "escalation_chain": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "role": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "timeout_seconds": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "role",
+                  "timeout_seconds"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "final_timeout_action": {
+              "enum": [
+                "DENY",
+                "CONTINUE_WITH_CAUTION",
+                "RETRY"
+              ]
+            }
+          },
+          "required": [
+            "timeout_seconds",
+            "escalation_chain",
+            "final_timeout_action"
+          ],
+          "additionalProperties": false
+        },
+        "timeout_policy_source": {
+          "enum": [
+            "org_config",
+            "default"
+          ]
+        }
+      },
+      "required": [
+        "record_type",
+        "format_version",
+        "record_id",
+        "org_id",
+        "recorded_at",
+        "approval_request_id",
+        "decision_ref",
+        "agent_id",
+        "requestor",
+        "role_required",
+        "created_at",
+        "timeout_policy",
+        "timeout_policy_source"
+      ],
+      "additionalProperties": false
+    },
+    "signature": {
+      "type": "object",
+      "description": "Outside the signed bytes (Spec 07 \u00a711.1, \u00a74.2, \u00a74.5).",
+      "properties": {
+        "signer": {
+          "type": "string",
+          "minLength": 1
+        },
+        "algorithm": {
+          "enum": [
+            "ES256",
+            "HMAC-SHA256"
+          ]
+        },
+        "kid": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "RFC 7638 thumbprint; required for ES256 (Spec 07 \u00a74.5)."
+        },
+        "signature": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]+={0,2}$"
+        }
+      },
+      "required": [
+        "signer",
+        "algorithm",
+        "kid",
+        "signature"
+      ],
+      "additionalProperties": false,
+      "if": {
+        "properties": {
+          "algorithm": {
+            "const": "ES256"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "kid": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{43}$"
+          }
+        }
+      }
+    }
+  },
+  "required": [
+    "payload",
+    "signature"
+  ],
+  "additionalProperties": false
+}

@@ -1,8 +1,8 @@
 # Specification 00: AAP-Core — Normative Kernel
 
-**Version:** 0.3.0 (Draft)  
+**Version:** 0.3.1 (Draft)  
 **Status:** Working Draft  
-**Supersedes:** 0.2.0  
+**Supersedes:** 0.3.0  
 **Layer:** Kernel  
 
 ## 1. Introduction
@@ -154,7 +154,7 @@ Materialization is tiered by cause:
 | `policy_drift` | MAY produce an Invalidation record when a drift finding changes effective authority (Spec 17) |
 | `policy_version_mismatch` | MAY produce an Invalidation record; at minimum the mismatch MUST surface in the Decision (Spec 06 §6.5) |
 
-**AGF serialization:** the revocation entry (Spec 05 §4.3) is the AGF serialization of an Invalidation with `cause` ∈ {`revoked`, `superseded`} — see Spec 05 §4.3.1 for the normative `reason` → `cause` mapping. Expiry derives from Spec 01 §3.2/§3.5. Drift findings per Spec 17.
+**AGF serialization:** the revocation entry (Spec 05 §4.3) is the AGF serialization of an Invalidation with `cause` ∈ {`revoked`, `superseded`} — see Spec 05 §4.3.1 for the normative `reason` → `cause` mapping. Expiry derives from Spec 01 §3.2/§3.5. Drift findings per Spec 17. A revocation is additionally emitted as a signed Invalidation record (Spec 07 §11.5).
 
 ## 4. Decision States and Qualifiers
 
@@ -228,3 +228,4 @@ Receipt `outcome: unknown` is honest but weak: a system in which most Receipts a
 | 0.1.1 | 2026-07-14 | KERNEL-NEG-03 expected outcome concretized after the Spec 06 §6.5 / Spec 11 POLICY-09/10 reconciliation (RFC 0001): explicit `POLICY_VERSION_NOT_FOUND` surfacing + `caution`-qualified outcome |
 | 0.2.0 | 2026-07-15 | §3.5 Receipt serialization points at Spec 07 §10; KERNEL-NEG-05 concretized to the two-stage verification violation codes |
 | 0.3.0 | 2026-09-29 | Added §1.1 Scope boundary: AAP evidence covers authority and agent actions; a Receipt reports an outcome rather than independently proving it; model safety, bias, data provenance and output quality are outside AAP; external evidence MAY be linked, but cryptographic binding needs a digest in a defined signed payload (not defined here); MUST NOT present AAP verification as covering external evidence |
+| 0.3.1 | 2026-09-30 | §3.6: revocations are additionally serialized as signed Invalidation records (Spec 07 §11.5) |
