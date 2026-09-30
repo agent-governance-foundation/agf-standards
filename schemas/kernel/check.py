@@ -101,9 +101,12 @@ def main():
     try:
         import jsonschema
     except ImportError:
-        print("jsonschema not installed — ran JSON well-formedness check only.")
-        print(f"All {len(fixture_files)} fixture files are well-formed JSON.")
-        return 0
+        # A check that could not run is a failure, never a pass: well-formed
+        # JSON says nothing about whether a fixture matches its schema.
+        print(f"FAIL: jsonschema is not installed, so no schema was validated "
+              f"({len(fixture_files)} fixture files are well-formed JSON only). "
+              "Install it (pip install jsonschema) and re-run.")
+        return 2
 
     with open(HERE / "authority.schema.json") as f:
         authority_schema = json.load(f)
