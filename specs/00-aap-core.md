@@ -1,8 +1,8 @@
 # Specification 00: AAP-Core — Normative Kernel
 
-**Version:** 0.2.0 (Draft)  
+**Version:** 0.3.0 (Draft)  
 **Status:** Working Draft  
-**Supersedes:** 0.1.1  
+**Supersedes:** 0.2.0  
 **Layer:** Kernel  
 
 ## 1. Introduction
@@ -23,6 +23,12 @@ The six objects:
 | **Invalidation** | Revocation, expiry, supersession, or policy invalidity, as an auditable record |
 
 The key words MUST, MUST NOT, REQUIRED, SHOULD, SHOULD NOT, MAY are to be interpreted as described in RFC 2119.
+
+### 1.1 Scope boundary
+
+AAP evidence establishes **authority and agent actions**: which Actor acted, under what Authority, on which Action, what was Decided under which policy version (including whether human review was required), what execution outcome the Receipt reports, and what was Invalidated and when. Verifying AAP evidence establishes that these records are authentic and consistent with one another. It does not by itself establish that an external action occurred: a Receipt is signed evidence of the outcome its enforcement point reported (§3.5, §7.3).
+
+AAP does **not** assess the model or data behind an agent. Safety evaluations, bias or fairness assessments, training-data or input provenance, and output quality are outside AAP; such evidence is produced and verified by other systems. An implementation MAY link external evidence of this kind to an AAP record. Any cryptographic binding between the two requires the external evidence's digest to be covered by a defined signed payload; this specification defines no such field, and leaves the binding mechanism to a later specification. An implementation MUST NOT present AAP verification as covering the content of external evidence.
 
 ## 2. Layering Model
 
@@ -221,3 +227,4 @@ Receipt `outcome: unknown` is honest but weak: a system in which most Receipts a
 | 0.1.0 | 2026-07-14 | Initial kernel specification, extracted as the normative core of Specs 01–27 (RFC 0001) |
 | 0.1.1 | 2026-07-14 | KERNEL-NEG-03 expected outcome concretized after the Spec 06 §6.5 / Spec 11 POLICY-09/10 reconciliation (RFC 0001): explicit `POLICY_VERSION_NOT_FOUND` surfacing + `caution`-qualified outcome |
 | 0.2.0 | 2026-07-15 | §3.5 Receipt serialization points at Spec 07 §10; KERNEL-NEG-05 concretized to the two-stage verification violation codes |
+| 0.3.0 | 2026-09-29 | Added §1.1 Scope boundary: AAP evidence covers authority and agent actions; a Receipt reports an outcome rather than independently proving it; model safety, bias, data provenance and output quality are outside AAP; external evidence MAY be linked, but cryptographic binding needs a digest in a defined signed payload (not defined here); MUST NOT present AAP verification as covering external evidence |

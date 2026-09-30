@@ -25,6 +25,8 @@ The Agent Governance Foundation (AGF) standards fill that gap.
 
 Agent protocols standardize **how agents talk** to tools and to each other. AGF standardizes **what they are permitted to do and who answers for it**. The two layers are complementary: AGF specifications include protocol adapters (Specs 21–23) that apply governance decisions to MCP, A2A, and plain HTTP traffic without modifying those protocols.
 
+What AGF evidence proves, and what it deliberately does not (such as model safety, bias, or data provenance), is set out in [Spec 00 §1.1](specs/00-aap-core.md#11-scope-boundary).
+
 ## Start here
 
 - **[Vision & Mission](vision-and-mission.md)** — why AGF exists and the model behind it. Read this first.

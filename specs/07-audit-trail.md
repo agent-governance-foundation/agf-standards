@@ -1,8 +1,8 @@
 # Specification 07: Audit Trail and Decision Provenance
 
-**Version:** 0.3.0 (Draft)  
+**Version:** 0.3.1 (Draft)  
 **Status:** Working Draft  
-**Supersedes:** 0.2.0  
+**Supersedes:** 0.3.0  
 **Layer:** Core format  
 
 ## 1. Introduction
@@ -14,6 +14,8 @@ Every trust decision must be auditable. This specification defines the decision 
 **The decision artifact is self-contained proof.**
 
 Auditors should not need access to the original system to verify a decision. The artifact contains everything needed: input, output, policies used, revocation state, and signatures.
+
+What that proof covers — and what it does not — is bounded by Spec 00 §1.1.
 
 ## 3. Decision Artifact Format
 
@@ -463,3 +465,4 @@ Receipt verification runs through `POST /v1/audit/verify` (§6.3.1), which check
 | 0.1.1 | 2026-07-14 | §3.2 `policy` field definition documents the conditional `requested_version`/`used_version` entries for the missing-policy-version state (Spec 06 §6.5) |
 | 0.2.0 | 2026-07-15 | Added §10 Execution Receipts (kernel Receipt serialization: format, closed signed payload, gateway emission rules, lifecycle) and §6.3.1 two-stage verification with structured violation codes (EXECUTED_AFTER_DENY, EXECUTED_WITHOUT_APPROVAL, RECEIPT_WITHOUT_DECISION, RECEIPT_SIGNATURE_INVALID, POLICY_VERSION_MISMATCH, PARENT_REVOKED); Change Log renumbered §10→§11 |
 | 0.3.0 | 2026-09-29 | Added §4.5 Key Publication and Selection: `kid` (RFC 7638 thumbprint) on ES256 signature blocks, outside the signed payload; unauthenticated JWKS at `/.well-known/jwks.json` with `agf_status`/`agf_not_before`/`agf_not_after` and retained retired keys; verifier key-selection rules — thumbprint recomputation, cryptographic verification with the selected key, full `agf_not_before`/`agf_not_after` window, revoked status; unknown key, key-set mismatch, invalid signature, outside key validity and revoked key reported distinctly; key set covers every PDP-signed object; key-set changes are explicit operator actions and a PDP fails closed on a key mismatch; explicit exception to Spec 09 §5.2 step 6 for evidence-signing keys; signer identity changes (`agf_previous_signers` plus a single HTTPS redirect from the earlier origin's key-set path, exact normalized-origin comparison, both required; reported as live-origin verification, not historical attestation). `kid` added to §3.1 and §10.1 examples, §10.1 field table, §10.2 |
+| 0.3.1 | 2026-09-29 | §2: what the decision artifact proves is bounded by Spec 00 §1.1 (scope boundary) |
