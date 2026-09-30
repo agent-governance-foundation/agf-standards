@@ -22,8 +22,8 @@ carries paired valid/invalid example documents per object plus a
 cross-object semantic vector (KERNEL-NEG-05); see
 [`kernel/fixtures/README.md`](kernel/fixtures/README.md) for the mapping to
 Spec 00 §6's conformance vectors. `kernel/check.py` validates every fixture
-against its schema (falls back to a JSON well-formedness check if
-`jsonschema` isn't installed).
+against its schema, and exits non-zero if `jsonschema` isn't installed (a check
+that could not run is a failure, not a pass).
 
 ## Core-format schemas (available)
 
