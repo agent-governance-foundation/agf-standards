@@ -7,10 +7,13 @@ For each <name>.schema.json here:
 
 Also re-derives the Spec 07 §11.2 / Spec 25 §2.2 test vectors in
 fixtures/signed-evidence.vectors.json (canonical bytes, SHA-256, salted
-HMAC-SHA256), and evaluates the Spec 07 §11.8 revocation classification cases in
-fixtures/signed-evidence.revocation-cases.json against a reference classifier.
+HMAC-SHA256), evaluates the Spec 07 §11.8 revocation classification cases in
+fixtures/signed-evidence.revocation-cases.json against a reference classifier, and
+re-derives the Spec 30 §3.5 request-binding vectors in
+fixtures/request-binding.vectors.json, and evaluates the Spec 07 §11.8 approval-rule cases
+(rules 3-6 and their precedence) in fixtures/signed-evidence.approval-cases.json.
 
-Exits non-zero if jsonschema is not installed, or if either required data file
+Exits non-zero if jsonschema is not installed, or if any required data file
 is missing: a check that could not run is a failure, never a pass.
 
 Usage: python3 schemas/check.py   (from the repo root, or from schemas/)
@@ -60,7 +63,8 @@ def b64u_decode(s: str) -> bytes:
     return base64.urlsafe_b64decode(s + "=" * (-len(s) % 4))
 
 
-REQUIRED_DATA = ["signed-evidence.vectors.json", "signed-evidence.revocation-cases.json"]
+REQUIRED_DATA = ["signed-evidence.vectors.json", "signed-evidence.revocation-cases.json",
+                 "request-binding.vectors.json", "signed-evidence.approval-cases.json"]
 
 
 def classify_revocation(decision_ts: int, invalidations: list[dict]) -> tuple[str, str]:
@@ -116,6 +120,81 @@ def check_vectors() -> list[str]:
     return errors
 
 
+def classify_approval(c: dict) -> tuple[str, str | None, list[str]]:
+    """Reference classifier for Spec 07 §11.8 approval rules 3-6 and their stated
+    precedence, assuming bindings (rules 1-2) hold. Never compares a time with a null
+    execution_not_after: rule 6 applies only to 1.1 attestations with an
+    execution-eligible outcome."""
+    a, r, v, d = c["attestation"], c["request"], c["validation"], c["decision_ts"]
+    if not (d <= r["created_at"] and r["recorded_at"] <= a["recorded_at"] and r["created_at"] <= a["decided_at"]):
+        return "not_established", "APPROVAL_STATUS_UNESTABLISHED", []
+    if a["recorded_at"] > v["checked_at"]:
+        return "violation", "APPROVAL_AFTER_EXECUTION_VALIDATION", []
+    outcome = a["outcome"]
+    if outcome in ("denied", "timeout"):
+        return "violation", "EXECUTED_WITHOUT_APPROVAL", []
+    if outcome not in ("approved", "continued_by_timeout_policy"):
+        return "not_established", "APPROVAL_STATUS_UNESTABLISHED", []
+    if v["result"] != "valid":
+        return "not_established", "APPROVAL_STATUS_UNESTABLISHED", []
+    flags = []
+    if outcome == "continued_by_timeout_policy":
+        p = r["timeout_policy"]
+        needed = p["timeout_seconds"] + sum(level["timeout_seconds"] for level in p["escalation_chain"])
+        if not (p["final_timeout_action"] == "CONTINUE_WITH_CAUTION" and r["timeout_policy_source"] == "org_config"
+                and a["decided_at"] >= r["created_at"] + needed):
+            return "not_established", "APPROVAL_STATUS_UNESTABLISHED", []
+        flags = ["CONTINUED_BY_TIMEOUT_POLICY"]
+    if a["format_version"] == "1.1":
+        exp = a["execution_not_after"]
+        if not isinstance(exp, int) or isinstance(exp, bool):
+            raise ValueError("1.1 attestation with an execution-eligible outcome must carry an integer expiry")
+        if v["checked_at"] > exp:
+            return "violation", "EXECUTION_VALIDATION_AFTER_APPROVAL_EXPIRY", []
+    return "verified", None, flags
+
+
+def check_approval_cases() -> list[str]:
+    errors = []
+    data = json.loads((FIXTURES / "signed-evidence.approval-cases.json").read_text(encoding="utf-8"))
+    for c in data["cases"]:
+        try:
+            got = classify_approval(c)
+        except (KeyError, ValueError, TypeError) as e:
+            errors.append(f"approval case {c['name']!r}: classifier error {e!r}")
+            continue
+        want = c["expected"]
+        if got != (want["status"], want["code"], want["flags"]):
+            errors.append(f"approval case {c['name']!r}: expected {want}, got {got}")
+        else:
+            print(f"OK  approval case: {c['name']} -> {got[0]} {got[1] or ''}".rstrip())
+    return errors
+
+
+def check_binding_vectors() -> list[str]:
+    """Spec 30 §3.5 request binding: re-derive binding_sha256 (a 43-character base64url
+    string) and request_binding (HMAC over that string's UTF-8 bytes, Spec 07 §11.2
+    text-field input), and confirm the raw-32-byte input gives a different value."""
+    errors = []
+    v = json.loads((FIXTURES / "request-binding.vectors.json").read_text(encoding="utf-8"))
+    salt = b64u_decode(v["salt_b64url"])
+    for c in v["cases"]:
+        canon = c14n_1_1(c["document"])
+        if canon.decode("ascii") != c["expected_canonical_ascii"]:
+            errors.append(f"request-binding {c['name']!r}: canonical form differs")
+        digest = hashlib.sha256(canon).digest()
+        bs = b64u(digest)
+        if len(bs) != 43 or bs != c["expected_binding_sha256"]:
+            errors.append(f"request-binding {c['name']!r}: binding_sha256 differs")
+        rb = b64u(hmac.new(salt, bs.encode("utf-8"), hashlib.sha256).digest())
+        if c["expected_request_binding"] != {"alg": "HMAC-SHA256-SALT16", "value": rb}:
+            errors.append(f"request-binding {c['name']!r}: request_binding differs")
+        raw = b64u(hmac.new(salt, digest, hashlib.sha256).digest())
+        if raw != c["negative_raw32_value"] or raw == rb:
+            errors.append(f"request-binding {c['name']!r}: raw-32-byte negative vector wrong or not distinct")
+    return errors
+
+
 def main() -> int:
     try:
         import jsonschema
@@ -147,7 +226,7 @@ def main() -> int:
                   else f"FAIL {f.name} ({name}): expected {status}; errors={[e.message for e in errs][:2]}")
             failures += 0 if ok else 1
 
-    for e in check_vectors() + check_revocation_cases():
+    for e in check_vectors() + check_revocation_cases() + check_binding_vectors() + check_approval_cases():
         print(f"FAIL {e}")
         failures += 1
     if failures:

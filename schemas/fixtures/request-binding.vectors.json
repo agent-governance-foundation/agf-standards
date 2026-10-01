@@ -1,0 +1,88 @@
+{
+  "description": "Spec 30 \u00a73.5 request binding. binding_sha256 = base64url(SHA-256(AGF-C14N-1.1(document))), a 43-character string. request_binding.value = base64url(HMAC-SHA256(key = salt, message = UTF-8 bytes of binding_sha256)) per Spec 07 \u00a711.2's text-field input. negative_raw32 is HMAC over the 32 raw digest bytes instead: NOT a valid encoding, and must differ.",
+  "salt_b64url": "AAECAwQFBgcICQoLDA0ODw",
+  "cases": [
+    {
+      "name": "http POST with query, headers, credential and JSON body",
+      "document": {
+        "binding_version": 1,
+        "org_id": "3f2b1c4e-0000-4000-8000-000000000001",
+        "caller": "7a1e3c2d-0000-4000-8000-000000000002",
+        "gateway_id": "9c1d2e3f-0000-4000-8000-000000000005",
+        "audience": "https://api.example.org",
+        "delegation_chain": [
+          "eyJhbGciOiJFUzI1NiIsImtpZCI6ImRpZC1hZ2YtZXhhbXBsZSJ9.eyJqdGkiOiJkZWxfZXhhbXBsZSJ9.c2ln"
+        ],
+        "kind": "http",
+        "action_type": "post",
+        "action_resource": "/payments",
+        "method": "POST",
+        "destination": "https://payments.example.org/payments",
+        "query": "currency=INR",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "user-agent",
+            "example-client/2.1"
+          ],
+          [
+            "x-request-id",
+            "req-7f3a"
+          ]
+        ],
+        "upstream_credential_sha256": "G1NPiq75UlsXFiyh2uDVNgvtYFYjMGWOn60300AePLk",
+        "body_b64": "eyJhbW91bnQiOiAyNTAwMDAuNTAsICJ0byI6ICJhY2N0XzQyIn0"
+      },
+      "expected_canonical_ascii": "{\"action_resource\":\"/payments\",\"action_type\":\"post\",\"audience\":\"https://api.example.org\",\"binding_version\":1,\"body_b64\":\"eyJhbW91bnQiOiAyNTAwMDAuNTAsICJ0byI6ICJhY2N0XzQyIn0\",\"caller\":\"7a1e3c2d-0000-4000-8000-000000000002\",\"delegation_chain\":[\"eyJhbGciOiJFUzI1NiIsImtpZCI6ImRpZC1hZ2YtZXhhbXBsZSJ9.eyJqdGkiOiJkZWxfZXhhbXBsZSJ9.c2ln\"],\"destination\":\"https://payments.example.org/payments\",\"gateway_id\":\"9c1d2e3f-0000-4000-8000-000000000005\",\"headers\":[[\"accept\",\"application/json\"],[\"content-type\",\"application/json\"],[\"user-agent\",\"example-client/2.1\"],[\"x-request-id\",\"req-7f3a\"]],\"kind\":\"http\",\"method\":\"POST\",\"org_id\":\"3f2b1c4e-0000-4000-8000-000000000001\",\"query\":\"currency=INR\",\"upstream_credential_sha256\":\"G1NPiq75UlsXFiyh2uDVNgvtYFYjMGWOn60300AePLk\"}",
+      "expected_binding_sha256": "tGWu0ecAwk1jNZXhSJ9n-sA8g3VTeYtVJbTDdwLBIck",
+      "expected_request_binding": {
+        "alg": "HMAC-SHA256-SALT16",
+        "value": "vA0cKAdVntkSOLlJjNEHDlPyQjLlYOtORQ0Ov9DAVl8"
+      },
+      "negative_raw32_value": "COlrCikaPbxbtt3D1yBJCZRJaUuOFZlXjUhYD9Jcpqg"
+    },
+    {
+      "name": "mcp tools/call with session and protocol headers",
+      "document": {
+        "binding_version": 1,
+        "org_id": "3f2b1c4e-0000-4000-8000-000000000001",
+        "caller": "7a1e3c2d-0000-4000-8000-000000000002",
+        "gateway_id": "9c1d2e3f-0000-4000-8000-000000000005",
+        "audience": "https://api.example.org",
+        "delegation_chain": [
+          "eyJhbGciOiJFUzI1NiIsImtpZCI6ImRpZC1hZ2YtZXhhbXBsZSJ9.eyJqdGkiOiJkZWxfZXhhbXBsZSJ9.c2ln"
+        ],
+        "kind": "mcp",
+        "action_type": "tools/call",
+        "action_resource": "transfer_funds",
+        "destination": "https://mcp.example.org/rpc",
+        "headers": [
+          [
+            "mcp-protocol-version",
+            "2025-06-18"
+          ],
+          [
+            "mcp-session-id",
+            "sess-91c2"
+          ]
+        ],
+        "upstream_credential_sha256": null,
+        "jsonrpc_b64": "eyJqc29ucnBjIjoiMi4wIiwiaWQiOjcsIm1ldGhvZCI6InRvb2xzL2NhbGwiLCJwYXJhbXMiOnsibmFtZSI6InRyYW5zZmVyX2Z1bmRzIiwiYXJndW1lbnRzIjp7ImFtb3VudCI6MTIuNX19fQ"
+      },
+      "expected_canonical_ascii": "{\"action_resource\":\"transfer_funds\",\"action_type\":\"tools/call\",\"audience\":\"https://api.example.org\",\"binding_version\":1,\"caller\":\"7a1e3c2d-0000-4000-8000-000000000002\",\"delegation_chain\":[\"eyJhbGciOiJFUzI1NiIsImtpZCI6ImRpZC1hZ2YtZXhhbXBsZSJ9.eyJqdGkiOiJkZWxfZXhhbXBsZSJ9.c2ln\"],\"destination\":\"https://mcp.example.org/rpc\",\"gateway_id\":\"9c1d2e3f-0000-4000-8000-000000000005\",\"headers\":[[\"mcp-protocol-version\",\"2025-06-18\"],[\"mcp-session-id\",\"sess-91c2\"]],\"jsonrpc_b64\":\"eyJqc29ucnBjIjoiMi4wIiwiaWQiOjcsIm1ldGhvZCI6InRvb2xzL2NhbGwiLCJwYXJhbXMiOnsibmFtZSI6InRyYW5zZmVyX2Z1bmRzIiwiYXJndW1lbnRzIjp7ImFtb3VudCI6MTIuNX19fQ\",\"kind\":\"mcp\",\"org_id\":\"3f2b1c4e-0000-4000-8000-000000000001\",\"upstream_credential_sha256\":null}",
+      "expected_binding_sha256": "626nOYQ8SmQttfmazRHJf7_vupA1yEu9NuzxP_RJtjs",
+      "expected_request_binding": {
+        "alg": "HMAC-SHA256-SALT16",
+        "value": "NBTNwoUfHiU3EskwRzZ1ZGuoKP0liGry1Oqa1ehbPn4"
+      },
+      "negative_raw32_value": "ieHuVXVj5oQl2Ur8o45gSJFPvdx0GX-i2C4rNQvspUs"
+    }
+  ]
+}

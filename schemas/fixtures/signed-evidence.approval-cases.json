@@ -1,0 +1,470 @@
+{
+  "description": "Spec 07 \u00a711.8 approval rule (rules 3\u20136) and its precedence, for an executed Receipt of a REVIEW_REQUIRED Decision whose bindings (rules 1\u20132) hold. Expected results are stated, not derived; schemas/check.py evaluates each case with a reference classifier. execution_not_after is compared only for 1.1 attestations with an execution-eligible outcome; null is never compared.",
+  "cases": [
+    {
+      "name": "1.1 approved, validated inside the window",
+      "decision_ts": 1790000000,
+      "request": {
+        "created_at": 1790000001,
+        "recorded_at": 1790000001,
+        "timeout_policy": {
+          "timeout_seconds": 600,
+          "escalation_chain": [],
+          "final_timeout_action": "DENY"
+        },
+        "timeout_policy_source": "default"
+      },
+      "attestation": {
+        "format_version": "1.1",
+        "outcome": "approved",
+        "decided_at": 1790000100,
+        "recorded_at": 1790000101,
+        "execution_not_after": 1790003700
+      },
+      "validation": {
+        "checked_at": 1790000160,
+        "result": "valid"
+      },
+      "expected": {
+        "status": "verified",
+        "code": null,
+        "flags": []
+      }
+    },
+    {
+      "name": "1.1 approved, validated exactly at execution_not_after",
+      "decision_ts": 1790000000,
+      "request": {
+        "created_at": 1790000001,
+        "recorded_at": 1790000001,
+        "timeout_policy": {
+          "timeout_seconds": 600,
+          "escalation_chain": [],
+          "final_timeout_action": "DENY"
+        },
+        "timeout_policy_source": "default"
+      },
+      "attestation": {
+        "format_version": "1.1",
+        "outcome": "approved",
+        "decided_at": 1790000100,
+        "recorded_at": 1790000101,
+        "execution_not_after": 1790003700
+      },
+      "validation": {
+        "checked_at": 1790003700,
+        "result": "valid"
+      },
+      "expected": {
+        "status": "verified",
+        "code": null,
+        "flags": []
+      }
+    },
+    {
+      "name": "1.1 approved, validated one second after execution_not_after",
+      "decision_ts": 1790000000,
+      "request": {
+        "created_at": 1790000001,
+        "recorded_at": 1790000001,
+        "timeout_policy": {
+          "timeout_seconds": 600,
+          "escalation_chain": [],
+          "final_timeout_action": "DENY"
+        },
+        "timeout_policy_source": "default"
+      },
+      "attestation": {
+        "format_version": "1.1",
+        "outcome": "approved",
+        "decided_at": 1790000100,
+        "recorded_at": 1790000101,
+        "execution_not_after": 1790003700
+      },
+      "validation": {
+        "checked_at": 1790003701,
+        "result": "valid"
+      },
+      "expected": {
+        "status": "violation",
+        "code": "EXECUTION_VALIDATION_AFTER_APPROVAL_EXPIRY",
+        "flags": []
+      }
+    },
+    {
+      "name": "1.1 denied (expiry null), validated long after \u2014 no comparison with null",
+      "decision_ts": 1790000000,
+      "request": {
+        "created_at": 1790000001,
+        "recorded_at": 1790000001,
+        "timeout_policy": {
+          "timeout_seconds": 600,
+          "escalation_chain": [],
+          "final_timeout_action": "DENY"
+        },
+        "timeout_policy_source": "default"
+      },
+      "attestation": {
+        "format_version": "1.1",
+        "outcome": "denied",
+        "decided_at": 1790000100,
+        "recorded_at": 1790000101,
+        "execution_not_after": null
+      },
+      "validation": {
+        "checked_at": 1791000099,
+        "result": "valid"
+      },
+      "expected": {
+        "status": "violation",
+        "code": "EXECUTED_WITHOUT_APPROVAL",
+        "flags": []
+      }
+    },
+    {
+      "name": "1.1 timeout (expiry null) \u2014 EXECUTED_WITHOUT_APPROVAL",
+      "decision_ts": 1790000000,
+      "request": {
+        "created_at": 1790000001,
+        "recorded_at": 1790000001,
+        "timeout_policy": {
+          "timeout_seconds": 600,
+          "escalation_chain": [],
+          "final_timeout_action": "DENY"
+        },
+        "timeout_policy_source": "default"
+      },
+      "attestation": {
+        "format_version": "1.1",
+        "outcome": "timeout",
+        "decided_at": 1790000100,
+        "recorded_at": 1790000101,
+        "execution_not_after": null
+      },
+      "validation": {
+        "checked_at": 1790000150,
+        "result": "valid"
+      },
+      "expected": {
+        "status": "violation",
+        "code": "EXECUTED_WITHOUT_APPROVAL",
+        "flags": []
+      }
+    },
+    {
+      "name": "1.1 escalated (expiry null) \u2014 not a grant",
+      "decision_ts": 1790000000,
+      "request": {
+        "created_at": 1790000001,
+        "recorded_at": 1790000001,
+        "timeout_policy": {
+          "timeout_seconds": 600,
+          "escalation_chain": [],
+          "final_timeout_action": "DENY"
+        },
+        "timeout_policy_source": "default"
+      },
+      "attestation": {
+        "format_version": "1.1",
+        "outcome": "escalated",
+        "decided_at": 1790000100,
+        "recorded_at": 1790000101,
+        "execution_not_after": null
+      },
+      "validation": {
+        "checked_at": 1790000150,
+        "result": "valid"
+      },
+      "expected": {
+        "status": "not_established",
+        "code": "APPROVAL_STATUS_UNESTABLISHED",
+        "flags": []
+      }
+    },
+    {
+      "name": "1.0 approved (no expiry field) \u2014 historical, rule 6 not applied",
+      "decision_ts": 1790000000,
+      "request": {
+        "created_at": 1790000001,
+        "recorded_at": 1790000001,
+        "timeout_policy": {
+          "timeout_seconds": 600,
+          "escalation_chain": [],
+          "final_timeout_action": "DENY"
+        },
+        "timeout_policy_source": "default"
+      },
+      "attestation": {
+        "format_version": "1.0",
+        "outcome": "approved",
+        "decided_at": 1790000100,
+        "recorded_at": 1790000101
+      },
+      "validation": {
+        "checked_at": 1791000099,
+        "result": "valid"
+      },
+      "expected": {
+        "status": "verified",
+        "code": null,
+        "flags": []
+      }
+    },
+    {
+      "name": "1.0 denied \u2014 violation without any expiry",
+      "decision_ts": 1790000000,
+      "request": {
+        "created_at": 1790000001,
+        "recorded_at": 1790000001,
+        "timeout_policy": {
+          "timeout_seconds": 600,
+          "escalation_chain": [],
+          "final_timeout_action": "DENY"
+        },
+        "timeout_policy_source": "default"
+      },
+      "attestation": {
+        "format_version": "1.0",
+        "outcome": "denied",
+        "decided_at": 1790000100,
+        "recorded_at": 1790000101
+      },
+      "validation": {
+        "checked_at": 1790000150,
+        "result": "valid"
+      },
+      "expected": {
+        "status": "violation",
+        "code": "EXECUTED_WITHOUT_APPROVAL",
+        "flags": []
+      }
+    },
+    {
+      "name": "1.1 continued_by_timeout_policy, rule 5 met, inside the window",
+      "decision_ts": 1790000000,
+      "request": {
+        "created_at": 1790000001,
+        "recorded_at": 1790000001,
+        "timeout_policy": {
+          "timeout_seconds": 600,
+          "escalation_chain": [
+            {
+              "role": "owner",
+              "timeout_seconds": 300
+            }
+          ],
+          "final_timeout_action": "CONTINUE_WITH_CAUTION"
+        },
+        "timeout_policy_source": "org_config"
+      },
+      "attestation": {
+        "format_version": "1.1",
+        "outcome": "continued_by_timeout_policy",
+        "decided_at": 1790000901,
+        "recorded_at": 1790000902,
+        "execution_not_after": 1790004501
+      },
+      "validation": {
+        "checked_at": 1790000931,
+        "result": "valid"
+      },
+      "expected": {
+        "status": "verified",
+        "code": null,
+        "flags": [
+          "CONTINUED_BY_TIMEOUT_POLICY"
+        ]
+      }
+    },
+    {
+      "name": "1.1 continued_by_timeout_policy, rule 5 met, validated after the window",
+      "decision_ts": 1790000000,
+      "request": {
+        "created_at": 1790000001,
+        "recorded_at": 1790000001,
+        "timeout_policy": {
+          "timeout_seconds": 600,
+          "escalation_chain": [
+            {
+              "role": "owner",
+              "timeout_seconds": 300
+            }
+          ],
+          "final_timeout_action": "CONTINUE_WITH_CAUTION"
+        },
+        "timeout_policy_source": "org_config"
+      },
+      "attestation": {
+        "format_version": "1.1",
+        "outcome": "continued_by_timeout_policy",
+        "decided_at": 1790000901,
+        "recorded_at": 1790000902,
+        "execution_not_after": 1790004501
+      },
+      "validation": {
+        "checked_at": 1790004502,
+        "result": "valid"
+      },
+      "expected": {
+        "status": "violation",
+        "code": "EXECUTION_VALIDATION_AFTER_APPROVAL_EXPIRY",
+        "flags": []
+      }
+    },
+    {
+      "name": "1.1 continued_by_timeout_policy under the default policy source \u2014 not permitted",
+      "decision_ts": 1790000000,
+      "request": {
+        "created_at": 1790000001,
+        "recorded_at": 1790000001,
+        "timeout_policy": {
+          "timeout_seconds": 600,
+          "escalation_chain": [],
+          "final_timeout_action": "DENY"
+        },
+        "timeout_policy_source": "default"
+      },
+      "attestation": {
+        "format_version": "1.1",
+        "outcome": "continued_by_timeout_policy",
+        "decided_at": 1790000901,
+        "recorded_at": 1790000902,
+        "execution_not_after": 1790004501
+      },
+      "validation": {
+        "checked_at": 1790000931,
+        "result": "valid"
+      },
+      "expected": {
+        "status": "not_established",
+        "code": "APPROVAL_STATUS_UNESTABLISHED",
+        "flags": []
+      }
+    },
+    {
+      "name": "1.1 continued_by_timeout_policy before the escalation chain elapsed \u2014 not permitted",
+      "decision_ts": 1790000000,
+      "request": {
+        "created_at": 1790000001,
+        "recorded_at": 1790000001,
+        "timeout_policy": {
+          "timeout_seconds": 600,
+          "escalation_chain": [
+            {
+              "role": "owner",
+              "timeout_seconds": 300
+            }
+          ],
+          "final_timeout_action": "CONTINUE_WITH_CAUTION"
+        },
+        "timeout_policy_source": "org_config"
+      },
+      "attestation": {
+        "format_version": "1.1",
+        "outcome": "continued_by_timeout_policy",
+        "decided_at": 1790000900,
+        "recorded_at": 1790000901,
+        "execution_not_after": 1790004500
+      },
+      "validation": {
+        "checked_at": 1790000931,
+        "result": "valid"
+      },
+      "expected": {
+        "status": "not_established",
+        "code": "APPROVAL_STATUS_UNESTABLISHED",
+        "flags": []
+      }
+    },
+    {
+      "name": "1.1 approved, attestation recorded after the validation",
+      "decision_ts": 1790000000,
+      "request": {
+        "created_at": 1790000001,
+        "recorded_at": 1790000001,
+        "timeout_policy": {
+          "timeout_seconds": 600,
+          "escalation_chain": [],
+          "final_timeout_action": "DENY"
+        },
+        "timeout_policy_source": "default"
+      },
+      "attestation": {
+        "format_version": "1.1",
+        "outcome": "approved",
+        "decided_at": 1790000100,
+        "recorded_at": 1790000190,
+        "execution_not_after": 1790003700
+      },
+      "validation": {
+        "checked_at": 1790000160,
+        "result": "valid"
+      },
+      "expected": {
+        "status": "violation",
+        "code": "APPROVAL_AFTER_EXECUTION_VALIDATION",
+        "flags": []
+      }
+    },
+    {
+      "name": "1.1 denied with an invalid validation \u2014 outcome takes precedence over rule 4",
+      "decision_ts": 1790000000,
+      "request": {
+        "created_at": 1790000001,
+        "recorded_at": 1790000001,
+        "timeout_policy": {
+          "timeout_seconds": 600,
+          "escalation_chain": [],
+          "final_timeout_action": "DENY"
+        },
+        "timeout_policy_source": "default"
+      },
+      "attestation": {
+        "format_version": "1.1",
+        "outcome": "denied",
+        "decided_at": 1790000100,
+        "recorded_at": 1790000101,
+        "execution_not_after": null
+      },
+      "validation": {
+        "checked_at": 1790000150,
+        "result": "invalid"
+      },
+      "expected": {
+        "status": "violation",
+        "code": "EXECUTED_WITHOUT_APPROVAL",
+        "flags": []
+      }
+    },
+    {
+      "name": "1.1 approved with an invalid validation \u2014 not established (rule 4)",
+      "decision_ts": 1790000000,
+      "request": {
+        "created_at": 1790000001,
+        "recorded_at": 1790000001,
+        "timeout_policy": {
+          "timeout_seconds": 600,
+          "escalation_chain": [],
+          "final_timeout_action": "DENY"
+        },
+        "timeout_policy_source": "default"
+      },
+      "attestation": {
+        "format_version": "1.1",
+        "outcome": "approved",
+        "decided_at": 1790000100,
+        "recorded_at": 1790000101,
+        "execution_not_after": 1790003700
+      },
+      "validation": {
+        "checked_at": 1790000150,
+        "result": "invalid"
+      },
+      "expected": {
+        "status": "not_established",
+        "code": "APPROVAL_STATUS_UNESTABLISHED",
+        "flags": []
+      }
+    }
+  ]
+}

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://agent-governance-foundation.github.io/agf-standards/schemas/approval-attestation-record.schema.json",
   "title": "Approval Attestation (signed evidence)",
-  "description": "Spec 07 \u00a711.4 \u2014 PDP attestation of a review request's terminal outcome; not non-repudiation by the approver. Schema checks structure only; the event-time invariant, bindings and ordering are semantic rules (Spec 07 \u00a711.1, \u00a711.8) enforced by verifiers.",
+  "description": "Spec 07 \u00a711.4 \u2014 PDP attestation of a review request's terminal outcome; not non-repudiation by the approver. Schema checks structure only; the event-time invariant, bindings and ordering are semantic rules (Spec 07 \u00a711.1, \u00a711.8) enforced by verifiers. format_version 1.1 (Spec 30 \u00a73.5) adds execution_not_after, the signed expiry required for approved execution; 1.0 remains valid for historical verification.",
   "type": "object",
   "properties": {
     "payload": {
@@ -12,7 +12,10 @@
           "const": "agf.approval_attestation"
         },
         "format_version": {
-          "const": "1.0"
+          "enum": [
+            "1.0",
+            "1.1"
+          ]
         },
         "record_id": {
           "type": "string",
@@ -88,6 +91,15 @@
               "additionalProperties": false
             }
           ]
+        },
+        "execution_not_after": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "format_version 1.1 only: Unix seconds after which the approval may not be executed (frozen and signed at approval, Spec 30 \u00a73.5). Integer for outcomes approved and continued_by_timeout_policy; null for every other outcome. Absent in 1.0."
         }
       },
       "required": [
@@ -105,7 +117,98 @@
         "role_required",
         "comments"
       ],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "format_version": {
+                "const": "1.0"
+              }
+            },
+            "required": [
+              "format_version"
+            ]
+          },
+          "then": {
+            "not": {
+              "required": [
+                "execution_not_after"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "format_version": {
+                "const": "1.1"
+              }
+            },
+            "required": [
+              "format_version"
+            ]
+          },
+          "then": {
+            "required": [
+              "execution_not_after"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "format_version": {
+                "const": "1.1"
+              },
+              "outcome": {
+                "enum": [
+                  "approved",
+                  "continued_by_timeout_policy"
+                ]
+              }
+            },
+            "required": [
+              "format_version",
+              "outcome"
+            ]
+          },
+          "then": {
+            "properties": {
+              "execution_not_after": {
+                "type": "integer"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "format_version": {
+                "const": "1.1"
+              },
+              "outcome": {
+                "enum": [
+                  "denied",
+                  "timeout",
+                  "escalated"
+                ]
+              }
+            },
+            "required": [
+              "format_version",
+              "outcome"
+            ]
+          },
+          "then": {
+            "properties": {
+              "execution_not_after": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
     },
     "signature": {
       "type": "object",

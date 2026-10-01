@@ -1,6 +1,6 @@
 # Specification 10: API Protocol
 
-**Version:** 0.4.0 (Draft)  
+**Version:** 0.4.1 (Draft)  
 **Status:** Working Draft  
 **Supersedes:** 0.3.0  
 **Layer:** Core format  
@@ -88,6 +88,16 @@ A client integrating against this single error envelope should also expect two f
 | `NOT_FOUND` | 404 | Resource not found |
 | `REVOCATION_LIST_FAILED` | 500 | Could not fetch revocation list |
 | `INTERNAL_ERROR` | 500 | Unexpected error |
+| `APPROVAL_NOT_ESTABLISHED` | 403 | Approved execution: no verified approval request record and 1.1 approval attestation for the named approval (Spec 30 §3.5.4) |
+| `APPROVAL_NOT_GRANTED` | 403 | Approved execution: the attested outcome is not a grant (Spec 30 §3.5.4) |
+| `APPROVAL_EXPIRED` | 403 | Approved execution: past the signed `execution_not_after` (Spec 30 §3.5.5) |
+| `APPROVAL_NOT_BINDABLE` | 403 | Approved execution: the Decision has no request binding, or its salt is missing or erased (Spec 30 §3.5.3) |
+| `APPROVAL_CALLER_MISMATCH` | 403 | Approved execution: caller or organisation differs from the reviewed request (Spec 30 §3.5.4) |
+| `APPROVAL_REQUEST_MISMATCH` | 409 | Approved execution: the re-presented call does not match the reviewed call (Spec 30 §3.5.2) |
+| `APPROVAL_CONSUMED` | 409 | Approved execution: the Decision already has an execution claim (Spec 30 §3.5.6) |
+| `APPROVAL_CLAIM_UNCERTAIN` | 503 | Approved execution: the claim's commit result is unknown; nothing was dispatched (Spec 30 §3.5.6) |
+| `EXECUTION_EVIDENCE_UNAVAILABLE` | 503 | Approved execution: the Execution Validation Record could not be persisted and signed; nothing was claimed or dispatched (Spec 30 §3.5.5) |
+| `EXECUTION_VALIDATION_STALE` | 503 | Approved execution: more than 5 seconds since validation (Spec 30 §3.5.5) |
 
 ## 5. Service APIs
 
@@ -390,3 +400,4 @@ Response:
 | 0.2.0 | 2026-07-14 | Documented the complete four-value `decision` enum (added missing `REVIEW_REQUIRED`) in §5.5 and the artifact-search filter, with kernel mapping reference (Spec 00 §4.2) |
 | 0.3.0 | 2026-07-14 | §5.5: added `policy_version_requested` / `policy_version_applied` / `error_code: POLICY_VERSION_NOT_FOUND` response fields for the missing-policy-version state (Spec 06 §6.5, KERNEL-NEG-03) |
 | 0.4.0 | 2026-07-15 | §5.6: Execution Receipt endpoints and two-stage verify response (Spec 07 §10, §6.3.1) |
+| 0.4.1 | 2026-10-01 | §4.3: approved-execution error codes (Spec 30 §3.5) |

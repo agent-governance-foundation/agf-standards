@@ -1,6 +1,6 @@
 # Specification 00: AAP-Core — Normative Kernel
 
-**Version:** 0.3.1 (Draft)  
+**Version:** 0.3.2 (Draft)  
 **Status:** Working Draft  
 **Supersedes:** 0.3.0  
 **Layer:** Kernel  
@@ -166,7 +166,7 @@ The kernel Decision `status` has exactly three values:
 |--------|---------|
 | `ALLOW` | The Action may proceed |
 | `DENY` | The Action must not proceed |
-| `REVIEW_REQUIRED` | The Action must not proceed until a human judgment is rendered (Spec 15) |
+| `REVIEW_REQUIRED` | The Action must not proceed until a human judgment is rendered, or until an escalation timeout policy the organisation has explicitly configured permits proceeding without one (Spec 15 §5, `CONTINUE_WITH_CAUTION`). The latter is **policy continuation, not human approval**, and is evidenced as such (Spec 07 §11.4, §11.8 rule 5) |
 
 Implementations MUST NOT add states. Anything finer-grained is a qualifier.
 
@@ -201,7 +201,7 @@ Positive-path conformance is covered by the categories in Spec 11. The kernel ad
 | ID | Vector | Expected outcome |
 |----|--------|------------------|
 | KERNEL-NEG-01 | Expired delegation: Authority presented after `expires_at` | `DENY`; expiry derivable per §3.6; error `EXPIRED` |
-| KERNEL-NEG-02 | Replayed action: a previously evaluated request (same Authority, Action, and request correlation id) re-presented, or a Decision/Receipt artifact presented as authorization | Fresh evaluation or rejection — a stored `ALLOW` MUST NOT be honored as bearer authority (§7.1); duplicate `jti` issuance MUST be rejected (Spec 01 §5.3) |
+| KERNEL-NEG-02 | Replayed action: a previously evaluated request (same Authority, Action, and request correlation id) re-presented, or a Decision/Receipt artifact presented as authorization | Fresh evaluation or rejection — a stored `ALLOW` MUST NOT be honored as bearer authority (§7.1); duplicate `jti` issuance MUST be rejected (Spec 01 §5.3). Sole exception: approved execution of a `REVIEW_REQUIRED` Decision (Spec 30 §3.5), with all of its controls — at most one dispatch of the exact reviewed call, after a signed human approval or a signed, explicitly permitted policy continuation, with revalidation, within a signed window. A stored `ALLOW`, and any Decision or Receipt presented outside Spec 30 §3.5, remains unusable as authority |
 | KERNEL-NEG-03 | Policy-version mismatch: requested `policy_ref` unavailable to the decider | MUST NOT evaluate under a different policy version; the mismatch MUST surface in the Decision (`POLICY_VERSION_NOT_FOUND` with a requested/applied version echo) and the outcome carries the `caution` qualifier — Spec 06 §6.5, Spec 11 POLICY-09/10 |
 | KERNEL-NEG-04 | Revoked parent grant: Invalidation (`cause: revoked`) exists for an ancestor of the presented Authority | `DENY` for the entire branch (Spec 05 §3); error `REVOKED` |
 | KERNEL-NEG-05 | Receipt for a denied action: a Receipt with `outcome: executed` whose `decision_ref` is a `DENY` or unresolved `REVIEW_REQUIRED` | The Receipt MUST verify as signature-valid but MUST be flagged `EXECUTED_AFTER_DENY` (or `EXECUTED_WITHOUT_APPROVAL` for unresolved review) by two-stage verification (Spec 07 §6.3.1) |
@@ -210,7 +210,7 @@ Positive-path conformance is covered by the categories in Spec 11. The kernel ad
 
 ### 7.1 Receipts are evidence, not authority
 
-Decision artifacts and Receipts are signed evidence about the past. Accepting either as authorization for a new execution converts an audit trail into a bearer-token system with no expiry. KERNEL-NEG-02 exists to make this failure mode a conformance failure, not just a design note.
+Decision artifacts and Receipts are signed evidence about the past. Accepting either as authorization for a new execution converts an audit trail into a bearer-token system with no expiry. KERNEL-NEG-02 exists to make this failure mode a conformance failure, not just a design note. Approved execution (Spec 30 §3.5) is not such acceptance: it completes a `REVIEW_REQUIRED` Decision once §4's condition is met — a human approval, or a policy continuation the organisation explicitly configured (which is not a human approval and is recorded as such) — for the byte-identical reviewed call only, at most once, within a signed window, with the Authorities revalidated, and only with every Spec 30 §3.5 control in place. What it consumes is the approval, not the stored Decision; a stored `ALLOW` never becomes bearer authority.
 
 ### 7.2 Invalidation timeliness
 
@@ -229,3 +229,4 @@ Receipt `outcome: unknown` is honest but weak: a system in which most Receipts a
 | 0.2.0 | 2026-07-15 | §3.5 Receipt serialization points at Spec 07 §10; KERNEL-NEG-05 concretized to the two-stage verification violation codes |
 | 0.3.0 | 2026-09-29 | Added §1.1 Scope boundary: AAP evidence covers authority and agent actions; a Receipt reports an outcome rather than independently proving it; model safety, bias, data provenance and output quality are outside AAP; external evidence MAY be linked, but cryptographic binding needs a digest in a defined signed payload (not defined here); MUST NOT present AAP verification as covering external evidence |
 | 0.3.1 | 2026-09-30 | §3.6: revocations are additionally serialized as signed Invalidation records (Spec 07 §11.5) |
+| 0.3.2 | 2026-10-01 | KERNEL-NEG-02 and §7.1: approved execution of a `REVIEW_REQUIRED` Decision (Spec 30 §3.5) stated as the sole, bounded exception to re-presented-request handling; no new kernel object or state. §4 `REVIEW_REQUIRED`: a human judgment, or an organisation-configured timeout continuation (Spec 15 §5), stated as policy continuation and not human approval; the NEG-02 exception requires every Spec 30 §3.5 control and keeps a stored `ALLOW` unusable as bearer authority |

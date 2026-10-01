@@ -1,6 +1,6 @@
 # Specification 11: Conformance Test Suite
 
-**Version:** 0.4.0 (Draft)  
+**Version:** 0.4.1 (Draft)  
 **Status:** Working Draft  
 **Supersedes:** 0.3.0  
 **Layer:** Operational  
@@ -191,7 +191,7 @@ AAP-Core (Spec 00 §6) REQUIRES five negative vectors at every conformance level
 | Test ID | Description | Requirement |
 |---------|-------------|-------------|
 | KERNEL-NEG-01 | Expired delegation presented | `DENY` with `EXPIRED` |
-| KERNEL-NEG-02 | Replayed action / artifact presented as authorization | fresh evaluation or rejection; stored `ALLOW` never honored as bearer authority |
+| KERNEL-NEG-02 | Replayed action / artifact presented as authorization | fresh evaluation or rejection; stored `ALLOW` never honored as bearer authority; sole exception: approved execution of a `REVIEW_REQUIRED` Decision with all Spec 30 §3.5 controls (at most one dispatch of the byte-identical reviewed call); a stored `ALLOW` is never bearer authority |
 | KERNEL-NEG-03 | Requested policy version unavailable | surfaced per Spec 06 §6.5: `POLICY_VERSION_NOT_FOUND` + version echo, decision capped at `ALLOW_WITH_CAUTION` (POLICY-09/10) |
 | KERNEL-NEG-04 | Revoked parent grant in presented chain | `DENY` with `REVOKED` for the whole branch |
 | KERNEL-NEG-05 | Receipt claims execution of a denied action | signature-valid but flagged `EXECUTED_AFTER_DENY` (or `EXECUTED_WITHOUT_APPROVAL`) by two-stage verification (Spec 07 §6.3.1) |
@@ -269,3 +269,4 @@ Overall: 75/77 passed (97.4%)
 | 0.2.0 | 2026-07-14 | Added §3.11 kernel negative vectors (KERNEL-NEG-01…05) required by AAP-Core (Spec 00, RFC 0001) |
 | 0.3.0 | 2026-07-14 | POLICY-09/10 reconciled with Spec 06 §6.5 (RFC 0001): trusted-issuer fallback removed; POLICY-09 = surfaced mismatch + `ALLOW_WITH_CAUTION` cap, POLICY-10 = artifact version echo. KERNEL-NEG-03 row updated to the resolved behavior |
 | 0.4.0 | 2026-07-15 | Added CHAIN-11 and §3.12 RECEIPT-01…07; KERNEL-NEG-05 concretized to the two-stage verification violation codes |
+| 0.4.1 | 2026-10-01 | KERNEL-NEG-02 row: the approved-execution exception (Spec 30 §3.5, Spec 00 0.3.2) |
