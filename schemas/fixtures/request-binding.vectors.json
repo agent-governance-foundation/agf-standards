@@ -83,6 +83,31 @@
         "value": "NBTNwoUfHiU3EskwRzZ1ZGuoKP0liGry1Oqa1ehbPn4"
       },
       "negative_raw32_value": "ieHuVXVj5oQl2Ur8o45gSJFPvdx0GX-i2C4rNQvspUs"
+    },
+    {
+      "name": "direct caller (API key: caller is the org) with decimal JSON payload",
+      "document": {
+        "binding_version": 1,
+        "kind": "direct",
+        "org_id": "3f2b1c4e-0000-4000-8000-000000000001",
+        "caller": "3f2b1c4e-0000-4000-8000-000000000001",
+        "gateway_id": null,
+        "audience": "https://api.example.org",
+        "delegation_chain": [
+          "eyJhbGciOiJFUzI1NiIsImtpZCI6ImRpZC1hZ2YtZXhhbXBsZSJ9.eyJqdGkiOiJkZWxfZXhhbXBsZSJ9.c2ln"
+        ],
+        "action_type": "payment:create",
+        "action_resource": "payments/acct_42",
+        "destination": "https://payments.example.org/v2/transfers",
+        "payload_b64": "eyJ0byI6ImFjY3RfNDIiLCJhbW91bnQiOjI1MDAwMC41MCwiY3VycmVuY3kiOiJJTlIifQ"
+      },
+      "expected_canonical_ascii": "{\"action_resource\":\"payments/acct_42\",\"action_type\":\"payment:create\",\"audience\":\"https://api.example.org\",\"binding_version\":1,\"caller\":\"3f2b1c4e-0000-4000-8000-000000000001\",\"delegation_chain\":[\"eyJhbGciOiJFUzI1NiIsImtpZCI6ImRpZC1hZ2YtZXhhbXBsZSJ9.eyJqdGkiOiJkZWxfZXhhbXBsZSJ9.c2ln\"],\"destination\":\"https://payments.example.org/v2/transfers\",\"gateway_id\":null,\"kind\":\"direct\",\"org_id\":\"3f2b1c4e-0000-4000-8000-000000000001\",\"payload_b64\":\"eyJ0byI6ImFjY3RfNDIiLCJhbW91bnQiOjI1MDAwMC41MCwiY3VycmVuY3kiOiJJTlIifQ\"}",
+      "expected_binding_sha256": "DKOXanYUWakAxv9XW1S1i3QWxn9bsFLs_EUaeUvmZJ0",
+      "expected_request_binding": {
+        "alg": "HMAC-SHA256-SALT16",
+        "value": "chECtSDKPjJiMGVeCjoRXboeV89L4pwf8irJhNuYc0o"
+      },
+      "negative_raw32_value": "R7QX4KgJ84ncYldtoxrMmBHpaYXRYbdYaWfunI_v2pw"
     }
   ]
 }
