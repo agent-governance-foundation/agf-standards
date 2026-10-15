@@ -1,8 +1,8 @@
 # Specification 01: Delegation Token Format
 
-**Version:** 0.1.1 (Draft)  
+**Version:** 0.2.0 (Draft)  
 **Status:** Working Draft  
-**Supersedes:** 0.1.0  
+**Supersedes:** 0.1.1  
 **Layer:** Core format  
 
 ## 1. Introduction
@@ -75,7 +75,7 @@ The JWT header MUST contain:
 |-------|------|-------------|
 | `parent` | string | Parent delegation ID (for chain linking) |
 | `max_depth` | number | Maximum allowed sub-delegation depth (default: 5) |
-| `policy_version` | string | Policy version to evaluate this delegation under (if omitted, the PDP resolves the org's active policy). If present but not loadable, the PDP surfaces the mismatch and caps the decision at `ALLOW_WITH_CAUTION` — see Spec 06 §6.5 |
+| `policy_version` | string | A pin: a policy version to evaluate **in addition to** the organisation's policy, never instead of it (Spec 06 §6.5). Authorized only when it originates in the chain's root token signed by a key the organisation has designated as a pinning authority. A later token may repeat that claim unchanged, and the repetition inherits the root's authorization. A claim introduced or changed in a later token is an unauthorized pin, whoever signed it, and the decision is `DENY`. A request-body version cannot replace an authorized claim (Spec 06 §6.5). If omitted, the PDP applies the organisation's policy alone |
 | `constraints` | object | Additional constraints (time, location, etc.) |
 
 ### 2.5 Scope Format
@@ -287,3 +287,4 @@ Verifiers SHOULD allow up to 5 seconds of clock skew when checking `exp` and `ia
 |---------|------|---------|
 | 0.1.0 | 2026-07-12 | Initial public working draft |
 | 0.1.1 | 2026-07-14 | §2.4 `policy_version` claim description corrected (PDP resolves the org's active policy, not "latest") and cross-referenced to Spec 06 §6.5 mismatch surfacing |
+| 0.2.0 | 2026-10-05 | §2.4 `policy_version` claim: a pin evaluated in addition to the organisation's policy, never instead of it; authorized only when it originates in a root token signed by an organisation-designated pinning authority; a later token repeating it unchanged inherits that authorization; a claim introduced or changed in a later token is unauthorized and yields `DENY` (Spec 06 §6.5) |

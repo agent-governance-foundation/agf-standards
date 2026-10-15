@@ -1,8 +1,8 @@
 # Specification 00: AAP-Core — Normative Kernel
 
-**Version:** 0.3.2 (Draft)  
+**Version:** 0.4.0 (Draft)  
 **Status:** Working Draft  
-**Supersedes:** 0.3.0  
+**Supersedes:** 0.3.2  
 **Layer:** Kernel  
 
 ## 1. Introduction
@@ -73,7 +73,7 @@ The scoped, expiring grant under which an Actor acts. Authority is always delega
 | `expires_at` | Yes | When the grant ceases to be valid. Non-expiring Authority MUST NOT be issued |
 | `parent` | No | `id` of the Authority this one was derived from (chain link) |
 | `constraints` | No | Additional validity conditions (time, location, etc.) |
-| `policy_ref` | No | Policy version to evaluate this Authority under |
+| `policy_ref` | No | A policy version pinned for this Authority: evaluated in addition to the organisation's policy, never instead of it, and honoured only when authorized (Spec 06 §6.5) |
 
 **AGF serialization:** the delegation token (Spec 01): `jti`, `iss`, `sub`, `scope`, `iat`, `exp`, `parent`, `constraints`, `policy_version`. Chains of Authority per Spec 02; canonical serialization per Spec 25.
 
@@ -202,7 +202,7 @@ Positive-path conformance is covered by the categories in Spec 11. The kernel ad
 |----|--------|------------------|
 | KERNEL-NEG-01 | Expired delegation: Authority presented after `expires_at` | `DENY`; expiry derivable per §3.6; error `EXPIRED` |
 | KERNEL-NEG-02 | Replayed action: a previously evaluated request (same Authority, Action, and request correlation id) re-presented, or a Decision/Receipt artifact presented as authorization | Fresh evaluation or rejection — a stored `ALLOW` MUST NOT be honored as bearer authority (§7.1); duplicate `jti` issuance MUST be rejected (Spec 01 §5.3). Sole exception: approved execution of a `REVIEW_REQUIRED` Decision (Spec 30 §3.5), with all of its controls — at most one dispatch of the exact reviewed call, after a signed human approval or a signed, explicitly permitted policy continuation, with revalidation, within a signed window. A stored `ALLOW`, and any Decision or Receipt presented outside Spec 30 §3.5, remains unusable as authority |
-| KERNEL-NEG-03 | Policy-version mismatch: requested `policy_ref` unavailable to the decider | MUST NOT evaluate under a different policy version; the mismatch MUST surface in the Decision (`POLICY_VERSION_NOT_FOUND` with a requested/applied version echo) and the outcome carries the `caution` qualifier — Spec 06 §6.5, Spec 11 POLICY-09/10 |
+| KERNEL-NEG-03 | Policy-version mismatch: requested `policy_ref` unavailable to the decider, or not authorized | MUST NOT evaluate under a different policy version, and a requested version MUST NOT disable or replace the organisation's policy. Where an organisation policy applies, an unavailable or unauthorized request yields `DENY`; an unauthorized or conflicting request yields `DENY` in every case. Only an authorized request for an unavailable version, where no organisation policy applies, is surfaced in the Decision (`POLICY_VERSION_NOT_FOUND` with a requested/applied version echo) with the `caution` qualifier — Spec 06 §6.5, Spec 11 POLICY-09 to POLICY-20 |
 | KERNEL-NEG-04 | Revoked parent grant: Invalidation (`cause: revoked`) exists for an ancestor of the presented Authority | `DENY` for the entire branch (Spec 05 §3); error `REVOKED` |
 | KERNEL-NEG-05 | Receipt for a denied action: a Receipt with `outcome: executed` whose `decision_ref` is a `DENY` or unresolved `REVIEW_REQUIRED` | The Receipt MUST verify as signature-valid but MUST be flagged `EXECUTED_AFTER_DENY` (or `EXECUTED_WITHOUT_APPROVAL` for unresolved review) by two-stage verification (Spec 07 §6.3.1) |
 
@@ -230,3 +230,4 @@ Receipt `outcome: unknown` is honest but weak: a system in which most Receipts a
 | 0.3.0 | 2026-09-29 | Added §1.1 Scope boundary: AAP evidence covers authority and agent actions; a Receipt reports an outcome rather than independently proving it; model safety, bias, data provenance and output quality are outside AAP; external evidence MAY be linked, but cryptographic binding needs a digest in a defined signed payload (not defined here); MUST NOT present AAP verification as covering external evidence |
 | 0.3.1 | 2026-09-30 | §3.6: revocations are additionally serialized as signed Invalidation records (Spec 07 §11.5) |
 | 0.3.2 | 2026-10-01 | KERNEL-NEG-02 and §7.1: approved execution of a `REVIEW_REQUIRED` Decision (Spec 30 §3.5) stated as the sole, bounded exception to re-presented-request handling; no new kernel object or state. §4 `REVIEW_REQUIRED`: a human judgment, or an organisation-configured timeout continuation (Spec 15 §5), stated as policy continuation and not human approval; the NEG-02 exception requires every Spec 30 §3.5 control and keeps a stored `ALLOW` unusable as bearer authority |
+| 0.4.0 | 2026-10-05 | KERNEL-NEG-03 and §3.2 `policy_ref`: a requested policy version never disables or replaces the organisation's policy (Spec 06 §6.5). An unavailable or unauthorized request is `DENY` where an organisation policy applies, and an unauthorized or conflicting request is always `DENY`. The surfaced, `caution`-qualified outcome remains only for an authorized request with no organisation policy |

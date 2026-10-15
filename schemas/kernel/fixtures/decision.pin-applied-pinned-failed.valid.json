@@ -1,0 +1,40 @@
+{
+  "id": "dec_1735603300_a1b2c3",
+  "status": "ALLOW",
+  "qualifiers": [],
+  "action": {
+    "type": "read:calendar",
+    "target": "calendars/alice@acme.com"
+  },
+  "authority_refs": [
+    "del_abc123"
+  ],
+  "policy": {
+    "version": "acme/policies/calendar/access@1.2.0",
+    "hash": "abc123",
+    "evaluator": "engine",
+    "evaluation_status": "evaluated",
+    "revision_id": "rev_7f3a9c",
+    "module_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "query_path": "agf/rev/r_7f3a9c",
+    "identity_seen": "rev_7f3a9c",
+    "requested_version": "acme/policies/payroll/approve@1.2.0",
+    "used_version": "acme/policies/payroll/approve@1.2.0",
+    "pin_status": "applied",
+    "pin_authorization": "caller_permission",
+    "pinned": {
+      "evaluator": "engine",
+      "evaluation_status": "failed",
+      "failure_state": "timeout",
+      "revision_id": "rev_p01",
+      "module_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "query_path": "agf/rev/r_p01"
+    }
+  },
+  "decider": "did:agf:acme:pdp-01",
+  "decided_at": 1735603300,
+  "reasons": [
+    "valid_delegation_chain",
+    "risk_below_threshold"
+  ]
+}

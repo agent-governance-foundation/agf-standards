@@ -43,7 +43,7 @@
     },
     "policy_ref": {
       "type": "string",
-      "description": "Policy version to evaluate this Authority under."
+      "description": "A policy version pinned for this Authority: evaluated in addition to the organisation's policy, never instead of it, and honoured only when authorized (Spec 06 §6.5)."
     }
   },
   "required": ["id", "grantor", "grantee", "scope", "issued_at", "expires_at"],

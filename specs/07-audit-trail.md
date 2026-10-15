@@ -1,8 +1,8 @@
 # Specification 07: Audit Trail and Decision Provenance
 
-**Version:** 0.5.0 (Draft)  
+**Version:** 0.6.0 (Draft)  
 **Status:** Working Draft  
-**Supersedes:** 0.3.2  
+**Supersedes:** 0.5.0  
 **Layer:** Core format  
 
 ## 1. Introduction
@@ -91,11 +91,85 @@ What that proof covers — and what it does not — is bounded by Spec 00 §1.1.
 | `timestamp` | Yes | Decision time |
 | `verifier_id` | Yes | DID of PDP |
 | `agent_id` | Yes | Acting principal (chain leaf subject); `null` when unextractable. Part of the signed evidence payload, so the serialized document must carry it |
-| `request` | Yes | Complete request |
+| `request` | Yes | Complete request. Includes the body's `policy_version` when the request named one (Spec 10 §5.5); a version named by a token is in `delegation_chain` |
 | `response` | Yes | Complete response |
-| `policy` | Yes | Policy version, decision, and content hash (`sha256`). When a requested policy version was not found, additionally carries `requested_version` and `used_version: null` (Spec 06 §6.5) |
+| `policy` | Yes | Policy version, decision, and content hash (`sha256`). When the request named a policy version (a pin, Spec 06 §6.5) and its outcome was determined, additionally carries `requested_version` and `used_version` (the pinned version evaluated, or `null` when the pin was not applied; before 0.6.0 recorded only for a version not found). From 0.6.0 it also carries the evaluation provenance and pin fields of §3.3 |
 | `revocation_state` | Yes | The revocation check the decision actually ran: `method` (`live_db` for a decide-time database check, `static_list` for a versioned list), `checked_at`, `checked_jtis`, and `result` (`passed` or `revoked:<jti>`). Empty when the chain was rejected before the revocation check ran |
 | `signatures` | Yes | Signatures from verifier(s) |
+
+### 3.3 Policy Evaluation Provenance
+
+The `policy` block records how the policy leg of the decision was produced. Because it is part of the signed evidence payload (§4.3), the fields below are signed with the rest of the block. Adding them changes neither the canonical encoding nor the payload's field set.
+
+| Field | Presence | Meaning |
+|---|---|---|
+| `evaluator` | always (from this version) | `engine`: the configured policy engine was used or attempted; for `failure_state: not_verified` it only identifies the evaluator the selected revision is bound to (see the labelling rules). `stub`: an explicitly configured development evaluator (Spec 06 §6.7.2). `none`: no evaluator was involved. |
+| `evaluation_status` | always (from this version) | `evaluated`: the policy produced a result, including NO_OPINION. `failed`: evaluation of a configured policy failed (Spec 06 §6.7.1). `not_configured`: no policy was configured for the request. `requested_version_not_found`: an authorized pin named a version that does not exist for the organisation, and no organisation policy applies (Spec 06 §6.5 item 4). `not_evaluated`: the request was denied before the policy leg ran (for example, at delegation-chain validation, or because a pin was not found or unauthorized, Spec 06 §6.5 items 3 and 4). |
+| `failure_state` | only when `evaluation_status` is `failed` | One of `deadline_exceeded`, `timeout`, `unreachable`, `http_<status>`, `malformed`, `not_loaded`, `revision_mismatch`, or, before any engine response, `selection_unavailable` (the selection could not be read) and `not_verified` (the selected revision could not be confirmed loaded and verified before querying) (Spec 06 §6.7.1) |
+| `revision_id` | when a revision was selected | The revision the decision selected (Spec 06 §6.6.3) |
+| `module_sha256` | when a revision was selected | SHA-256 of that revision's stored module text (Spec 06 §6.6.2) |
+| `query_path` | when the engine was queried | The engine-specific location queried (for Rego, the data path of the revision's package) |
+| `identity_seen` | only when the engine returned a **string** identity | The value of the revision identity rule returned by the engine (Spec 06 §6.7.1). Present for `evaluated` (where it equals `revision_id`), for `failure_state: revision_mismatch` (where it differs from `revision_id`), and for `failure_state: malformed` only when the identity itself was a valid string and a decision member was malformed (Spec 06 §6.7.1 row 10). A returned identity that is not a string is **not recorded**; the decision records `failure_state: malformed` instead. Otherwise absent. |
+| `requested_version` | when the request named a policy version and the pin outcome was determined (Spec 06 §6.5) | The version requested (a pin, Spec 06 §6.5). Omitted, with every other pin field, when the decision ended before any pin outcome was determined; the named version then remains in `request` (§3.2) |
+| `used_version` | with `requested_version` | The pinned version evaluated, or `null` when the pin was not applied. Never a fabricated version. When the pin was applied it equals `requested_version` |
+| `pin_status` | with `requested_version` (from this version) | `applied`; `not_found` (the version does not exist for the requesting organisation; a version of another organisation is recorded identically); `unauthorized`; or `conflict` (the body named a version different from the chain's authorized pin) (Spec 06 §6.5) |
+| `delegation_pin` | only when `pin_status` is `conflict` | The version the delegation chain's authorized claim pinned. `requested_version` then carries the body's version, and the two differ |
+| `pin_authorization` | only when `pin_status` is `applied` | `organisation_authority` when the pin comes from the chain, including when the body repeats it; otherwise `caller_permission` (Spec 06 §6.5) |
+| `pinned` | only when `pin_status` is `applied` | The pinned evaluation's own provenance: `evaluator`, `evaluation_status` (`evaluated` or `failed`) and the other fields above, under the same combination rules. The top-level fields then describe the organisation's mandatory policy (`not_configured` when none applies) |
+
+**Allowed combinations.**
+- Once any provenance field is present, `evaluator` and `evaluation_status` MUST both be present.
+- Fields marked "absent" MUST NOT appear.
+
+| `evaluation_status` | `evaluator` | `failure_state` | `revision_id`, `module_sha256` | `query_path` | `identity_seen` |
+|---|---|---|---|---|---|
+| `evaluated` | `engine` | absent | required | required | required, equal to `revision_id` |
+| `evaluated` | `stub` | absent | optional | optional | absent |
+| `failed` | `engine` | required (an engine-response state or `deadline_exceeded`) | required | required except for `deadline_exceeded` (not queried) | per the `identity_seen` row above |
+| `failed` | `engine` | `not_verified` | required | absent (not queried) | absent |
+| `failed` | `none` | `selection_unavailable` | absent (no revision was selected) | absent | absent |
+| `not_configured` | `none` | absent | absent | absent | absent |
+| `requested_version_not_found` | `none` | absent | absent | absent | absent |
+| `not_evaluated` | `none` | absent | absent | absent | absent |
+
+For `requested_version_not_found`, the block MUST also carry `requested_version`, an explicit `used_version: null` and `pin_status: not_found` (§3.2; Spec 06 §6.5).
+
+**Allowed pin combinations.** When `evaluation_status` and `requested_version` are both present, `pin_status` MUST be present.
+
+| `pin_status` | `used_version` | `evaluation_status` | `pin_authorization`, `pinned` |
+|---|---|---|---|
+| `applied` | the pinned version (a string) | `evaluated`, `failed` or `not_configured` (of the mandatory policy) | required |
+| `not_found` | `null` | `not_evaluated` (an organisation policy applies) or `requested_version_not_found` (none applies) | absent |
+| `unauthorized` | `null` | `not_evaluated` | absent |
+| `conflict` | `null` | `not_evaluated` | absent; `delegation_pin` required |
+
+`delegation_pin` appears only with `conflict`.
+
+**Undetermined pin outcome.** Pin fields are present exactly when a pin outcome was determined (Spec 06 §6.5). A determined outcome is recorded even when a later failure also affects the decision. When the decision ended before any outcome was determined, all pin fields are omitted, and the remaining fields record the mandatory policy's provenance truthfully. There is no status for an undetermined outcome.
+
+**Labelling rules:**
+- A failed engine attempt is recorded as `evaluator: engine, evaluation_status: failed` with its `failure_state`. It MUST NOT be labelled `evaluated`.
+- A denial before the policy leg is recorded as `evaluator: none, evaluation_status: not_evaluated`, and the policy block's `decision` member MUST be present with the value `null`: there is no policy outcome. A placeholder `DENY`, or any other policy outcome, in the policy block is not conformant from this version.
+- A selection that could not be read is recorded as `evaluator: none, evaluation_status: failed, failure_state: selection_unavailable`, with no `revision_id`, `module_sha256`, `query_path` or `identity_seen`: no revision, query or identity is invented.
+- A selected revision that could not be confirmed loaded and verified before querying is recorded as `evaluator: engine, evaluation_status: failed, failure_state: not_verified`, with its `revision_id` and `module_sha256` and without `query_path` or `identity_seen`. Here `evaluator: engine` only identifies the evaluator selected for the revision. It does not mean that the engine was contacted for this decision, or that any policy query ran.
+- No configured policy is recorded as `evaluator: none, evaluation_status: not_configured`.
+- An authorized pin of a version that does not exist, where no organisation policy applies, is recorded as `evaluator: none, evaluation_status: requested_version_not_found`, `pin_status: not_found`. It MUST NOT be recorded as `not_configured`.
+- A pin denied under Spec 06 §6.5 items 3 and 4 (not found, unauthorized or in conflict, where denial applies) is recorded as `evaluator: none, evaluation_status: not_evaluated` with its `pin_status`.
+
+**What these fields establish, and what they don't.**
+- They are the PDP's signed assertion of which revision it selected, what it queried, and what identity the engine returned.
+- They bind the decision to a specific accepted module text.
+- They are **not** independent proof that the engine executed that module: the engine's execution is not attested, and a verifier relies on the PDP for that step. Verifiers and documentation MUST NOT present them as more than that.
+- `module_sha256` identifies the module the PDP selected and loaded. It does not by itself prove which rules answered a particular query.
+
+**Compatibility.**
+- The fields are additive.
+- Decision artifacts issued under earlier versions keep their signatures and remain valid.
+- A verifier that finds none of these fields MUST report the policy evaluation's provenance as **not established**: neither as evaluated nor as failed.
+- A verifier that cannot authenticate the policy block MUST also report its provenance as **not established**. In particular, an `HMAC-SHA256` signature can be verified only with the trusted shared secret: a public key set cannot authenticate it, so a verifier without that secret cannot rely on the provenance fields.
+- The absence of these fields does not distinguish an artifact from a signer that predates this version from one by a non-conformant signer of this version. No version marker is defined for that purpose; a verifier MUST NOT treat absence as evidence of either.
+- A verifier MUST NOT infer from absent pin fields that no version was requested, or that a pin was authorized, applied or refused. A version the request named is read from `request` (§3.2).
+- A verifier MUST NOT infer the fields' values from `version`, `decision` or `sha256`. Under earlier versions `sha256` identified the intended policy file, not what an engine evaluated.
 
 ## 4. Signing Requirements
 
@@ -126,7 +200,7 @@ evidence_payload = {
     "agent_id": agent_id,
     "request": request,      # delegation chain, action, context
     "response": response,    # decision, scores, reasoning, override state
-    "policy": policy,        # version, decision, content hash
+    "policy": policy,        # version, decision, content hash; from 0.6.0 the §3.3 provenance fields
 }
 payload_bytes = json.dumps(evidence_payload, separators=(",", ":"), sort_keys=True).encode()
 signature = sign(payload_bytes, private_key)  # ES256 over the canonical bytes
@@ -305,7 +379,7 @@ Semantic checks run only when the cryptographic stage passes, and cover the arti
 | `EXECUTED_WITHOUT_APPROVAL` | As above for `REVIEW_REQUIRED`, evaluated on signed evidence records per §11.8 |
 | `RECEIPT_WITHOUT_DECISION` | A Receipt references a `decision_ref` that does not resolve to a stored Decision artifact |
 | `RECEIPT_SIGNATURE_INVALID` | A correlated Receipt's signature fails verification (does not affect the artifact's own `signature_valid`) |
-| `POLICY_VERSION_MISMATCH` | The policy block records a requested-but-missing version (`used_version: null`) yet the response decision is an uncapped `ALLOW` — inconsistent with Spec 06 §6.5 |
+| `POLICY_VERSION_MISMATCH` | The signed policy block is inconsistent with Spec 06 §6.5: a pin recorded as `unauthorized` or `conflict`, or as `not_found` with `evaluation_status: not_evaluated`, with a response decision other than `DENY`; a `conflict` whose `delegation_pin` equals `requested_version`; `evaluation_status: requested_version_not_found` with an uncapped `ALLOW` (for artifacts before 0.6.0: a `requested_version` with `used_version: null` and an uncapped `ALLOW`); or `pin_status: applied` with a `used_version` that differs from `requested_version` |
 | `PARENT_REVOKED` | A delegation in the decided chain was revoked **before** the decision timestamp (evaluated on signed Invalidation records per §11.8). A revocation made after the decision is not a violation — validity is evaluated at decision time (Spec 00 §5) — and continues to surface only through `revocation_state` |
 
 Semantic checks are evaluated **only** on signed evidence: the Decision artifact, correlated Receipts (§10), and signed evidence records (§11). They MUST NOT fall back to unsigned or editable storage (for example, database rows recording an approval status or a revocation). Each applicable check reports one status — `verified`, `violation`, `not_established` or `not_applicable` (§11.8). Evidence that is missing, not verified, unsigned (legacy or new) or erased yields `not_established` for the check that needs it — never `verified`, and never a violation on its own. `semantic_valid` is true **only when every applicable check is `verified`**; a `violation` or a `not_established` makes it false. A semantic violation never retroactively falsifies signatures; it means the signed evidence itself proves an enforcement or consistency failure. §11.8 adds the codes `APPROVAL_AFTER_EXECUTION_VALIDATION`, `EXECUTION_VALIDATION_AFTER_APPROVAL_EXPIRY`, `EXECUTED_MORE_THAN_APPROVED`, `EXECUTED_AFTER_FAILED_VALIDATION`, `REVOCATION_DETECTED_AFTER_DECISION`, `APPROVAL_STATUS_UNESTABLISHED`, `EXECUTION_VALIDATION_UNESTABLISHED`, `REVOCATION_STATUS_UNESTABLISHED`, `EVIDENCE_ERASED`, the `*_UNSIGNED` / `*_UNSIGNED_LEGACY` reasons, and the informational flags `CONTINUED_BY_TIMEOUT_POLICY` and `REVOKED_AFTER_DECISION`.
@@ -650,3 +724,4 @@ Salted digests reduce disclosure; they do not anonymize. Identifiers remain link
 | 0.3.2 | 2026-09-30 | §4.5 key selection: status (revoked key) is checked before the validity window, and after cryptographic verification, so a revoked key's signature is reported as revoked regardless of timestamp; without a `kid`, revoked keys remain candidates whatever their window, so that case reaches the status check. Steps 4 and 5 swapped; no change to what is accepted |
 | 0.4.0 | 2026-09-30 | Added §11 Signed Evidence Records: common envelope (`record_type`, `format_version`, `record_id`, `org_id`, `recorded_at`) with domain separation and recording vs event time; `AGF-C14N-1.1` signing input and salted HMAC-SHA256 digests; approval request record, approval attestation (PDP attestation, `continued_by_timeout_policy` distinct from approval), signed Invalidation (kernel serialization), signed Execution Validation Record; recording guarantees on signing failure; verification rules with `verified`/`violation`/`not_established`/`not_applicable` statuses, applied unconditionally with no fallback to unsigned storage (§6.3.1 updated accordingly), and new codes; revocation classified as pre-decision (`PARENT_REVOKED`), delayed detection (`REVOCATION_DETECTED_AFTER_DECISION`) or post-decision (not a violation); completeness limitation; retention/erasure coverage. §6.3.1 and §7 point to §11. Change Log renumbered §11→§12 |
 | 0.5.0 | 2026-10-01 | Approved execution of `REVIEW_REQUIRED` Decisions (Spec 30 §3.5): `agf.approval_attestation` `format_version` `"1.1"` adds signed `execution_not_after`, frozen at the terminal outcome and required for execution (1.0 still accepted for verifying existing evidence; §11.1, §11.2, §11.4); §11.8 approval rule 6 (`V.checked_at ≤ A.execution_not_after` — validation within the signed window, dispatch time not proven) with `EXECUTION_VALIDATION_AFTER_APPROVAL_EXPIRY`, and a duplicate-execution check `EXECUTED_MORE_THAN_APPROVED` that states its completeness limits and that consumption state is not evidence. Rule 6 and `EXECUTION_VALIDATION_AFTER_APPROVAL_EXPIRY` apply only to execution-eligible outcomes with an integer expiry (never compared with `null`); stated precedence; reference cases `signed-evidence.approval-cases.json` |
+| 0.6.0 | 2026-10-05 | Added §3.3 Policy Evaluation Provenance: additive signed fields in the `policy` block (`evaluator`, `evaluation_status`, `failure_state`, `revision_id`, `module_sha256`, `query_path`, `identity_seen`), labelling rules (a failed attempt is never `evaluated`; a denial before the policy leg is `not_evaluated`, not a placeholder policy `DENY`; a missing requested version is `requested_version_not_found`, never `not_configured`; allowed field combinations; a non-string engine identity is not recorded), pin fields (`pin_status`, `pin_authorization`, `pinned`, `delegation_pin`; `requested_version_not_found` requires `requested_version` and an explicit `used_version: null`) and their allowed combinations (Spec 06 §6.5), the bounded claim (a PDP assertion, not proof of engine execution), and compatibility (earlier artifacts remain valid; absent fields mean provenance not established). Canonical encoding and the evidence payload's field set are unchanged. §6.3.1 `POLICY_VERSION_MISMATCH` redefined for pin outcomes. Amended (2026-10-07, draft): §3.3 `failure_state` values `selection_unavailable` (`evaluator: none`, no revision or query fields) and `not_verified` (revision and hash, no query or identity); `not_evaluated` carries `decision: null`; provenance that cannot be authenticated (including HMAC without the shared secret) is not established; absence cannot distinguish a legacy signer from a non-conformant one. Clarified (2026-10-07, draft): pin fields only once a pin outcome was determined, never an invented status; `request` carries the body's `policy_version`; verifiers infer nothing from absent pin fields. |

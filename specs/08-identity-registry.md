@@ -1,8 +1,8 @@
 # Specification 08: Identity Registry and DID Resolution
 
-**Version:** 0.1.0 (Draft)  
+**Version:** 0.2.0 (Draft)  
 **Status:** Working Draft  
-**Supersedes:** None  
+**Supersedes:** 0.1.0  
 **Layer:** Core format  
 
 ## 1. Introduction
@@ -109,6 +109,21 @@ Resolution MUST support:
 
 A key resolver MAY combine multiple key sources (e.g. filesystem keys and a database-backed cache of agent keys) — see Spec 09 for where key storage belongs normatively.
 
+### 3.4 Identity Ownership and Key Binding
+
+1. **Ownership.** Every registered identity is owned by exactly one organisation, or is the PDP's platform identity. Ownership is the registry's record. It MUST NOT be inferred from a DID's text, including its namespace (Spec 01 §2.6).
+   - A DID names at most one registered identity across all identity kinds: agents, organisation identities and the platform identity. Registration MUST refuse a DID that already names a registered identity of any kind, atomically with the registration, so that of concurrent registrations of one DID at most one succeeds.
+   - Two forms are reserved: the organisation-identity form (`did:agf:<namespace>:org:root`), which only an organisation identity may hold, and the PDP's platform DID, which no other identity may hold.
+   - A lookup that finds more than one record for a DID, or a reserved form held by the wrong kind of identity, is a lookup **failure** (item 4), never a choice between the records.
+2. **Keys.** An identity's keys are its registered verification methods. Where rotation applies, the key is the one covering the token's issue time (§4.2). A key belongs to an identity only if it is one of these.
+3. **Resolution for verification.**
+   - A key identifier selects candidate keys. Whether the key that verified a token belongs to the token's issuer is decided against the issuer identity's keys (Spec 02 §3.4).
+   - A resolver that maps key identifiers to keys across all identities MAY supply candidates. It MUST NOT be taken as establishing that a key belongs to any particular identity.
+   - A key identifier is not unique to one identity. A resolver MUST keep every identity's keys as candidates under a shared identifier; adding, replacing or removing one identity's key MUST NOT remove or replace another identity's. For an identity whose keys rotate (Spec 07 §4.5), its candidates are those its rotation rules allow at the token's issue time, and no copy of its keys held elsewhere may bypass those rules.
+4. **Lookup outcomes.** A lookup returns the identity (with its owner, status and keys), or "not found", or fails.
+   - A failure is never treated as either answer.
+   - On decision, revalidation, recording and signing paths, "not found" and failure both deny (Spec 02 §3.10), in every environment.
+
 ## 4. Key Management
 
 ### 4.1 Key Types
@@ -211,6 +226,8 @@ Agent A → PUT /v1/identities/did:agf:acme:agent:a
 
 ### 7.1 DID Squatting
 
+A DID's text proves nothing about who controls it or which organisation owns it (§3.4). Implementations MUST NOT grant trust because an identifier resembles another organisation's, for example by embedding its namespace.
+
 Prevent impersonation by requiring proof of control:
 - New DIDs must be signed by controller's existing key
 - First DID for a controller requires out-of-band verification
@@ -231,3 +248,4 @@ If registry is compromised:
 | Version | Date | Changes |
 |---------|------|---------|
 | 0.1.0 | 2026-07-12 | Initial public working draft |
+| 0.2.0 | 2026-10-08 | Draft: added §3.4 Identity Ownership and Key Binding: ownership is the registry's record, never inferred from a DID's text; an identity's keys are its registered verification methods; a deployment-wide key-identifier map supplies candidates only; a lookup returns the identity, not found, or a failure, and not found and failure both deny on decision, revalidation, recording and signing paths in every environment. §7.1 no trust from an identifier that resembles another organisation's. Identity names and key candidates (2026-10-14, draft): §3.4 item 1, a DID names at most one identity across kinds, with atomic registration and reserved organisation-identity and platform forms; an ambiguous lookup is a failure. §3.4 item 3, candidates under a shared key identifier are kept per identity |

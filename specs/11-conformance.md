@@ -1,8 +1,8 @@
 # Specification 11: Conformance Test Suite
 
-**Version:** 0.4.1 (Draft)  
+**Version:** 0.5.0 (Draft)  
 **Status:** Working Draft  
-**Supersedes:** 0.3.0  
+**Supersedes:** 0.4.1  
 **Layer:** Operational  
 
 ## 1. Introduction
@@ -109,9 +109,26 @@ pytest tests/test_risk.py -k RISK-05 --weighting=conservative
 | POLICY-05 | Policy versioning | correct version used |
 | POLICY-06 | Missing policy | fail with `NOT_FOUND` |
 | POLICY-07 | Invalid policy syntax | fail with `INVALID_POLICY` |
-| POLICY-08 | Token with `policy_version` claim | exact version used |
-| POLICY-09 | `policy_version` not found | no fallback to any other version; response carries `error_code: POLICY_VERSION_NOT_FOUND` with `policy_version_requested` / `policy_version_applied: null`; decision capped at `ALLOW_WITH_CAUTION` (Spec 06 §6.5) |
-| POLICY-10 | `policy_version` not found: artifact echo | artifact policy block records `requested_version` and `used_version: null`, never a fabricated version (Spec 06 §6.5) |
+| POLICY-08 | Authorized pin of an existing version (caller with `policies.pin`, or a root-token claim signed by an organisation pinning authority) | pinned version evaluated **in addition to** the mandatory organisation policy; `policy_version_applied` and artifact `used_version` equal the pinned version; `pin_status: applied` with `pin_authorization` and `pinned` provenance (Spec 06 §6.5 item 1) |
+| POLICY-09 | Authorized pin of a version that does not exist; no organisation policy applies | no fallback to any other version; response carries `error_code: POLICY_VERSION_NOT_FOUND` with `policy_version_requested` / `policy_version_applied: null`; decision capped at `ALLOW_WITH_CAUTION`; artifact `evaluation_status: requested_version_not_found` (Spec 06 §6.5 item 4) |
+| POLICY-10 | Pin not applied: artifact echo | artifact policy block records `requested_version`, an explicit `used_version: null` and `pin_status` `not_found` or `unauthorized`, never a fabricated version (Spec 06 §6.5; Spec 07 §3.3) |
+
+POLICY-11 to POLICY-20, except POLICY-17, use an organisation whose mandatory policy denies action X and which also has two existing versions of its own: P, which allows X, and S, which denies X.
+- **Rejected pins** (POLICY-11 to POLICY-14, POLICY-17, POLICY-19): the engine is not queried for the pin, and the artifact records `evaluation_status: not_evaluated`.
+- **Evaluated pins** (POLICY-15, POLICY-16, POLICY-18, POLICY-20): the authorized pin is evaluated in addition to the mandatory policy.
+
+| Test ID | Description | Expected |
+|---------|-------------|----------|
+| POLICY-11 | Body `policy_version: P` from a caller without `policies.pin` | `DENY`, `error_code: POLICY_VERSION_UNAUTHORIZED`; `pin_status: unauthorized` |
+| POLICY-12 | Claim `policy_version: P` in a token signed by the acting agent (the root token carries none); also a later token whose claim differs from an authorized root-token claim | `DENY`, `error_code: POLICY_VERSION_UNAUTHORIZED`; `pin_status: unauthorized` |
+| POLICY-13 | Authorized pin of a version that does not exist | `DENY`, `error_code: POLICY_VERSION_NOT_FOUND`; `pin_status: not_found` |
+| POLICY-14 | Authorized pin of another organisation's existing version | identical to POLICY-13 in decision, `error_code`, response fields and artifact policy-block fields: nothing discloses that the version exists |
+| POLICY-15 | Authorized pin of P | `DENY` from the mandatory policy; artifact records `pin_status: applied`, the `pinned` provenance of P's evaluation and the mandatory policy's provenance |
+| POLICY-16 | Authorized pin of a stricter version S that denies X, after the mandatory policy is changed to allow X | `DENY` (deny-overrides, Spec 06 §6.5 item 1) |
+| POLICY-17 | No organisation policy applies; unauthorized pin (body without `policies.pin`, or a claim introduced or changed in a token signed by an agent) | `DENY`, `error_code: POLICY_VERSION_UNAUTHORIZED`; `evaluation_status: not_evaluated` |
+| POLICY-18 | Root-token claim `policy_version: S`, signed by an organisation pinning authority; later tokens, signed by agents, repeat it unchanged | pin applied: `pin_status: applied`, `pin_authorization: organisation_authority`; S evaluated in addition to the mandatory policy |
+| POLICY-19 | Authorized root-token claim S; body `policy_version: P` from a caller with `policies.pin` | `DENY`, `error_code: POLICY_VERSION_CONFLICT`; neither version resolved; artifact `pin_status: conflict`, `requested_version: P`, `delegation_pin: S`, `used_version: null` |
+| POLICY-20 | Authorized root-token claim S; body `policy_version: S` from a caller with `policies.pin` | pin applied once; `pin_authorization: organisation_authority` |
 
 ### 3.7 Audit Tests (Level 2)
 
@@ -192,7 +209,7 @@ AAP-Core (Spec 00 §6) REQUIRES five negative vectors at every conformance level
 |---------|-------------|-------------|
 | KERNEL-NEG-01 | Expired delegation presented | `DENY` with `EXPIRED` |
 | KERNEL-NEG-02 | Replayed action / artifact presented as authorization | fresh evaluation or rejection; stored `ALLOW` never honored as bearer authority; sole exception: approved execution of a `REVIEW_REQUIRED` Decision with all Spec 30 §3.5 controls (at most one dispatch of the byte-identical reviewed call); a stored `ALLOW` is never bearer authority |
-| KERNEL-NEG-03 | Requested policy version unavailable | surfaced per Spec 06 §6.5: `POLICY_VERSION_NOT_FOUND` + version echo, decision capped at `ALLOW_WITH_CAUTION` (POLICY-09/10) |
+| KERNEL-NEG-03 | Requested policy version unavailable or not authorized | never disables or replaces the organisation's policy (Spec 06 §6.5): `DENY` where an organisation policy applies (POLICY-11 to POLICY-15) and for every unauthorized or conflicting pin (POLICY-11, -12, -17, -19); only an authorized pin of a missing version with no organisation policy is surfaced with `POLICY_VERSION_NOT_FOUND` + version echo and capped at `ALLOW_WITH_CAUTION` (POLICY-09/10) |
 | KERNEL-NEG-04 | Revoked parent grant in presented chain | `DENY` with `REVOKED` for the whole branch |
 | KERNEL-NEG-05 | Receipt claims execution of a denied action | signature-valid but flagged `EXECUTED_AFTER_DENY` (or `EXECUTED_WITHOUT_APPROVAL`) by two-stage verification (Spec 07 §6.3.1) |
 
@@ -270,3 +287,4 @@ Overall: 75/77 passed (97.4%)
 | 0.3.0 | 2026-07-14 | POLICY-09/10 reconciled with Spec 06 §6.5 (RFC 0001): trusted-issuer fallback removed; POLICY-09 = surfaced mismatch + `ALLOW_WITH_CAUTION` cap, POLICY-10 = artifact version echo. KERNEL-NEG-03 row updated to the resolved behavior |
 | 0.4.0 | 2026-07-15 | Added CHAIN-11 and §3.12 RECEIPT-01…07; KERNEL-NEG-05 concretized to the two-stage verification violation codes |
 | 0.4.1 | 2026-10-01 | KERNEL-NEG-02 row: the approved-execution exception (Spec 30 §3.5, Spec 00 0.3.2) |
+| 0.5.0 | 2026-10-05 | POLICY-08 to POLICY-10 and KERNEL-NEG-03 updated for Spec 06 §6.5 Policy Version Pinning; added POLICY-11 to POLICY-20: overrides by request body and by agent-signed token claim, nonexistent and foreign versions, an existing permissive version, deny-overrides with a stricter pin, an unauthorized pin with no organisation policy, an unchanged repetition of an authorized root claim, and a body pin that conflicts with or repeats it |

@@ -1,0 +1,26 @@
+{
+  "id": "dec_1735603300_a1b2c3",
+  "status": "ALLOW",
+  "qualifiers": [],
+  "action": {
+    "type": "read:calendar",
+    "target": "calendars/alice@acme.com"
+  },
+  "authority_refs": [
+    "del_abc123"
+  ],
+  "policy": {
+    "version": "acme/policies/calendar/access@1.2.0",
+    "hash": "abc123",
+    "evaluator": "none",
+    "evaluation_status": "requested_version_not_found",
+    "requested_version": "acme/policies/payroll/approve@1.2.0",
+    "used_version": null
+  },
+  "decider": "did:agf:acme:pdp-01",
+  "decided_at": 1735603300,
+  "reasons": [
+    "valid_delegation_chain",
+    "risk_below_threshold"
+  ]
+}

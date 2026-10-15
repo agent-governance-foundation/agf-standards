@@ -12,7 +12,11 @@
     "status": {
       "type": "string",
       "description": "Exactly one of ALLOW, DENY, REVIEW_REQUIRED.",
-      "enum": ["ALLOW", "DENY", "REVIEW_REQUIRED"]
+      "enum": [
+        "ALLOW",
+        "DENY",
+        "REVIEW_REQUIRED"
+      ]
     },
     "qualifiers": {
       "type": "array",
@@ -27,14 +31,21 @@
         {
           "type": "object",
           "properties": {
-            "type": { "type": "string" },
-            "target": { "type": "string" },
+            "type": {
+              "type": "string"
+            },
+            "target": {
+              "type": "string"
+            },
             "context": {
               "type": "object",
               "additionalProperties": true
             }
           },
-          "required": ["type", "target"],
+          "required": [
+            "type",
+            "target"
+          ],
           "additionalProperties": true
         },
         {
@@ -51,17 +62,388 @@
     },
     "policy": {
       "type": "object",
-      "description": "The policy version and content hash the decision was evaluated under.",
+      "description": "The policy version and content hash the decision was evaluated under. The provenance members (Spec 07 §3.3) are optional and additive; when absent, policy evaluation provenance is not established. requested_version/used_version/pin_* record a pin (Spec 06 §6.5), only once its outcome was determined; when they are absent nothing about a pin may be inferred (the named version is in the request record).",
       "properties": {
         "version": {
           "type": "string"
         },
         "hash": {
           "type": "string"
+        },
+        "requested_version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The policy version the request named (a pin, Spec 06 §6.5). Present exactly when the pin outcome was determined; absence does not mean that no version was requested."
+        },
+        "used_version": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The pinned version evaluated, or null when the pin was not applied. Equal to requested_version when applied (a verifier rule; not expressible here)."
+        },
+        "pin_status": {
+          "enum": [
+            "applied",
+            "not_found",
+            "unauthorized",
+            "conflict"
+          ],
+          "description": "not_found includes a version of another organisation, recorded identically (Spec 06 §6.5 item 2)."
+        },
+        "pin_authorization": {
+          "enum": [
+            "caller_permission",
+            "organisation_authority"
+          ]
+        },
+        "pinned": {
+          "description": "The applied pin's own evaluation provenance, under the same rules as the policy block.",
+          "allOf": [
+            {
+              "$ref": "#/$defs/policy_provenance"
+            }
+          ],
+          "required": [
+            "evaluator",
+            "evaluation_status"
+          ],
+          "properties": {
+            "evaluation_status": {
+              "enum": [
+                "evaluated",
+                "failed"
+              ]
+            }
+          }
+        },
+        "delegation_pin": {
+          "type": "string",
+          "minLength": 1,
+          "description": "conflict only: the version the delegation chain's authorized claim pinned; requested_version carries the body's differing version (Spec 06 §6.5). Inequality is a verifier rule."
+        },
+        "decision": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The policy leg's outcome. null exactly when evaluation_status is not_evaluated: there is no policy outcome (Spec 07 §3.3)."
         }
       },
-      "required": ["version"],
-      "additionalProperties": true
+      "required": [
+        "version"
+      ],
+      "additionalProperties": true,
+      "allOf": [
+        {
+          "$comment": "P0 provenance: the policy block's provenance rules (Spec 07 §3.3).",
+          "$ref": "#/$defs/policy_provenance"
+        },
+        {
+          "$comment": "P1 pin fields are 0.6.0 members: with any of them present, evaluator and evaluation_status are required.",
+          "if": {
+            "anyOf": [
+              {
+                "required": [
+                  "pin_status"
+                ]
+              },
+              {
+                "required": [
+                  "pin_authorization"
+                ]
+              },
+              {
+                "required": [
+                  "pinned"
+                ]
+              },
+              {
+                "required": [
+                  "delegation_pin"
+                ]
+              }
+            ]
+          },
+          "then": {
+            "required": [
+              "evaluator",
+              "evaluation_status"
+            ]
+          }
+        },
+        {
+          "$comment": "P2 a provenance-labelled block that records a requested version labels the pin.",
+          "if": {
+            "required": [
+              "evaluation_status",
+              "requested_version"
+            ]
+          },
+          "then": {
+            "required": [
+              "pin_status"
+            ]
+          }
+        },
+        {
+          "$comment": "P3 a labelled pin records the requested version and an explicit used_version.",
+          "if": {
+            "required": [
+              "pin_status"
+            ]
+          },
+          "then": {
+            "required": [
+              "requested_version",
+              "used_version"
+            ]
+          }
+        },
+        {
+          "$comment": "P4 requested_version_not_found: requested_version, an explicit used_version null, pin_status not_found.",
+          "if": {
+            "properties": {
+              "evaluation_status": {
+                "const": "requested_version_not_found"
+              }
+            },
+            "required": [
+              "evaluation_status"
+            ]
+          },
+          "then": {
+            "required": [
+              "requested_version",
+              "used_version",
+              "pin_status"
+            ],
+            "properties": {
+              "used_version": {
+                "type": "null"
+              },
+              "pin_status": {
+                "const": "not_found"
+              }
+            }
+          }
+        },
+        {
+          "$comment": "P5 applied: the pinned version (a string), its authorization and its provenance; the top level is the mandatory policy.",
+          "if": {
+            "properties": {
+              "pin_status": {
+                "const": "applied"
+              }
+            },
+            "required": [
+              "pin_status"
+            ]
+          },
+          "then": {
+            "required": [
+              "pin_authorization",
+              "pinned"
+            ],
+            "properties": {
+              "used_version": {
+                "type": "string"
+              },
+              "evaluation_status": {
+                "enum": [
+                  "evaluated",
+                  "failed",
+                  "not_configured"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "$comment": "P6 not applied: used_version null, no authorization or pinned provenance, the policy leg not run.",
+          "if": {
+            "properties": {
+              "pin_status": {
+                "enum": [
+                  "not_found",
+                  "unauthorized",
+                  "conflict"
+                ]
+              }
+            },
+            "required": [
+              "pin_status"
+            ]
+          },
+          "then": {
+            "allOf": [
+              {
+                "properties": {
+                  "used_version": {
+                    "type": "null"
+                  },
+                  "evaluation_status": {
+                    "enum": [
+                      "not_evaluated",
+                      "requested_version_not_found"
+                    ]
+                  }
+                }
+              },
+              {
+                "not": {
+                  "anyOf": [
+                    {
+                      "required": [
+                        "pin_authorization"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "pinned"
+                      ]
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          "$comment": "P7 an unauthorized or conflicting pin is always DENY before the policy leg.",
+          "if": {
+            "properties": {
+              "pin_status": {
+                "enum": [
+                  "unauthorized",
+                  "conflict"
+                ]
+              }
+            },
+            "required": [
+              "pin_status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "evaluation_status": {
+                "const": "not_evaluated"
+              }
+            }
+          }
+        },
+        {
+          "$comment": "P8 pin_authorization and pinned belong only to an applied pin.",
+          "if": {
+            "anyOf": [
+              {
+                "required": [
+                  "pin_authorization"
+                ]
+              },
+              {
+                "required": [
+                  "pinned"
+                ]
+              }
+            ]
+          },
+          "then": {
+            "properties": {
+              "pin_status": {
+                "const": "applied"
+              }
+            },
+            "required": [
+              "pin_status"
+            ]
+          }
+        },
+        {
+          "$comment": "P9 a conflict records the chain's pin.",
+          "if": {
+            "properties": {
+              "pin_status": {
+                "const": "conflict"
+              }
+            },
+            "required": [
+              "pin_status"
+            ]
+          },
+          "then": {
+            "required": [
+              "delegation_pin"
+            ]
+          }
+        },
+        {
+          "$comment": "P10 delegation_pin belongs only to a conflict.",
+          "if": {
+            "required": [
+              "delegation_pin"
+            ]
+          },
+          "then": {
+            "properties": {
+              "pin_status": {
+                "const": "conflict"
+              }
+            },
+            "required": [
+              "pin_status"
+            ]
+          }
+        },
+        {
+          "$comment": "P5 not_evaluated: decision present and null; a policy outcome (such as a placeholder DENY) is not conformant.",
+          "if": {
+            "properties": {
+              "evaluation_status": {
+                "const": "not_evaluated"
+              }
+            },
+            "required": [
+              "evaluation_status"
+            ]
+          },
+          "then": {
+            "required": [
+              "decision"
+            ],
+            "properties": {
+              "decision": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "$comment": "P5 any other provenance-labelled status: decision, when present, is an outcome, never null.",
+          "if": {
+            "properties": {
+              "evaluation_status": {
+                "enum": [
+                  "evaluated",
+                  "failed",
+                  "not_configured",
+                  "requested_version_not_found"
+                ]
+              }
+            },
+            "required": [
+              "evaluation_status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "decision": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      ]
     },
     "decider": {
       "type": "string",
@@ -89,5 +471,489 @@
     "decider",
     "decided_at"
   ],
-  "additionalProperties": true
+  "additionalProperties": true,
+  "$defs": {
+    "policy_provenance": {
+      "$comment": "Evaluation provenance (Spec 07 §3.3). Used for the policy block (the mandatory organisation policy) and for policy.pinned (an applied pin).",
+      "type": "object",
+      "properties": {
+        "evaluator": {
+          "enum": [
+            "engine",
+            "stub",
+            "none"
+          ],
+          "description": "engine: the configured policy engine was used or attempted (for failure_state not_verified, it only identifies the evaluator selected for the revision: no engine contact or policy query is implied); stub: an explicitly configured development evaluator; none: no evaluator was involved."
+        },
+        "evaluation_status": {
+          "enum": [
+            "evaluated",
+            "failed",
+            "not_configured",
+            "requested_version_not_found",
+            "not_evaluated"
+          ]
+        },
+        "failure_state": {
+          "type": "string",
+          "pattern": "^(deadline_exceeded|timeout|unreachable|malformed|not_loaded|revision_mismatch|selection_unavailable|not_verified|http_[0-9]{3})$",
+          "description": "Present only when evaluation_status is failed (Spec 06 §6.7.1). selection_unavailable and not_verified occur before any engine response."
+        },
+        "revision_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "module_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "query_path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "identity_seen": {
+          "type": "string",
+          "description": "Recorded only when the engine returned a string identity (Spec 07 §3.3). A non-string identity is not recorded; the decision carries failure_state malformed instead."
+        }
+      },
+      "allOf": [
+        {
+          "$comment": "Compatibility: with no provenance member nothing below applies. Once any is present, evaluator and evaluation_status are both required.",
+          "if": {
+            "anyOf": [
+              {
+                "required": [
+                  "evaluator"
+                ]
+              },
+              {
+                "required": [
+                  "evaluation_status"
+                ]
+              },
+              {
+                "required": [
+                  "failure_state"
+                ]
+              },
+              {
+                "required": [
+                  "revision_id"
+                ]
+              },
+              {
+                "required": [
+                  "module_sha256"
+                ]
+              },
+              {
+                "required": [
+                  "query_path"
+                ]
+              },
+              {
+                "required": [
+                  "identity_seen"
+                ]
+              }
+            ]
+          },
+          "then": {
+            "required": [
+              "evaluator",
+              "evaluation_status"
+            ]
+          }
+        },
+        {
+          "$comment": "evaluated: by the engine or an explicitly configured stub; never with a failure_state.",
+          "if": {
+            "properties": {
+              "evaluation_status": {
+                "enum": [
+                  "evaluated"
+                ]
+              }
+            },
+            "required": [
+              "evaluation_status"
+            ]
+          },
+          "then": {
+            "allOf": [
+              {
+                "properties": {
+                  "evaluator": {
+                    "enum": [
+                      "engine",
+                      "stub"
+                    ]
+                  }
+                }
+              },
+              {
+                "not": {
+                  "anyOf": [
+                    {
+                      "required": [
+                        "failure_state"
+                      ]
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          "$comment": "evaluated by the engine: selected revision, query and returned identity are recorded.",
+          "if": {
+            "allOf": [
+              {
+                "properties": {
+                  "evaluation_status": {
+                    "enum": [
+                      "evaluated"
+                    ]
+                  }
+                },
+                "required": [
+                  "evaluation_status"
+                ]
+              },
+              {
+                "properties": {
+                  "evaluator": {
+                    "const": "engine"
+                  }
+                },
+                "required": [
+                  "evaluator"
+                ]
+              }
+            ]
+          },
+          "then": {
+            "required": [
+              "revision_id",
+              "module_sha256",
+              "query_path",
+              "identity_seen"
+            ]
+          }
+        },
+        {
+          "$comment": "evaluated by a stub: there is no engine identity.",
+          "if": {
+            "allOf": [
+              {
+                "properties": {
+                  "evaluation_status": {
+                    "enum": [
+                      "evaluated"
+                    ]
+                  }
+                },
+                "required": [
+                  "evaluation_status"
+                ]
+              },
+              {
+                "properties": {
+                  "evaluator": {
+                    "const": "stub"
+                  }
+                },
+                "required": [
+                  "evaluator"
+                ]
+              }
+            ]
+          },
+          "then": {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "identity_seen"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "$comment": "failed with an engine-side state: the engine was used or attempted; the selected revision and the failure_state are recorded. (selection_unavailable is the exception: see below.)",
+          "if": {
+            "allOf": [
+              {
+                "properties": {
+                  "evaluation_status": {
+                    "enum": [
+                      "failed"
+                    ]
+                  }
+                },
+                "required": [
+                  "evaluation_status"
+                ]
+              },
+              {
+                "not": {
+                  "properties": {
+                    "failure_state": {
+                      "const": "selection_unavailable"
+                    }
+                  },
+                  "required": [
+                    "failure_state"
+                  ]
+                }
+              }
+            ]
+          },
+          "then": {
+            "properties": {
+              "evaluator": {
+                "const": "engine"
+              }
+            },
+            "required": [
+              "failure_state",
+              "revision_id",
+              "module_sha256"
+            ]
+          }
+        },
+        {
+          "$comment": "failed after the query was sent: the query is recorded (not for deadline_exceeded, not_verified or selection_unavailable, which never query).",
+          "if": {
+            "allOf": [
+              {
+                "properties": {
+                  "evaluation_status": {
+                    "enum": [
+                      "failed"
+                    ]
+                  }
+                },
+                "required": [
+                  "evaluation_status"
+                ]
+              },
+              {
+                "required": [
+                  "failure_state"
+                ]
+              },
+              {
+                "not": {
+                  "properties": {
+                    "failure_state": {
+                      "enum": [
+                        "deadline_exceeded",
+                        "not_verified",
+                        "selection_unavailable"
+                      ]
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "then": {
+            "required": [
+              "query_path"
+            ]
+          }
+        },
+        {
+          "$comment": "deadline_exceeded and not_verified: the engine was not queried.",
+          "if": {
+            "properties": {
+              "failure_state": {
+                "enum": [
+                  "deadline_exceeded",
+                  "not_verified"
+                ]
+              }
+            },
+            "required": [
+              "failure_state"
+            ]
+          },
+          "then": {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "query_path"
+                  ]
+                },
+                {
+                  "required": [
+                    "identity_seen"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "$comment": "revision_mismatch: the string identity the engine returned is recorded.",
+          "if": {
+            "properties": {
+              "failure_state": {
+                "const": "revision_mismatch"
+              }
+            },
+            "required": [
+              "failure_state"
+            ]
+          },
+          "then": {
+            "required": [
+              "identity_seen"
+            ]
+          }
+        },
+        {
+          "$comment": "failure states reached before any string identity existed: none is recorded.",
+          "if": {
+            "properties": {
+              "failure_state": {
+                "pattern": "^(deadline_exceeded|timeout|unreachable|not_loaded|selection_unavailable|not_verified|http_[0-9]{3})$"
+              }
+            },
+            "required": [
+              "failure_state"
+            ]
+          },
+          "then": {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "identity_seen"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "$comment": "selection_unavailable: no evaluator and no revision was involved; nothing is invented.",
+          "if": {
+            "properties": {
+              "failure_state": {
+                "const": "selection_unavailable"
+              }
+            },
+            "required": [
+              "failure_state"
+            ]
+          },
+          "then": {
+            "allOf": [
+              {
+                "properties": {
+                  "evaluator": {
+                    "const": "none"
+                  },
+                  "evaluation_status": {
+                    "const": "failed"
+                  }
+                }
+              },
+              {
+                "not": {
+                  "anyOf": [
+                    {
+                      "required": [
+                        "revision_id"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "module_sha256"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "query_path"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "identity_seen"
+                      ]
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          "$comment": "no evaluator involved: none of the engine members.",
+          "if": {
+            "properties": {
+              "evaluation_status": {
+                "enum": [
+                  "not_configured",
+                  "requested_version_not_found",
+                  "not_evaluated"
+                ]
+              }
+            },
+            "required": [
+              "evaluation_status"
+            ]
+          },
+          "then": {
+            "allOf": [
+              {
+                "properties": {
+                  "evaluator": {
+                    "const": "none"
+                  }
+                }
+              },
+              {
+                "not": {
+                  "anyOf": [
+                    {
+                      "required": [
+                        "failure_state"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "revision_id"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "module_sha256"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "query_path"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "identity_seen"
+                      ]
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
 }
