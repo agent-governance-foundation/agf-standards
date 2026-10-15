@@ -139,6 +139,8 @@ did:agf:example:demo-agent
 
 Future versions will support additional standard DID methods (`did:key`, `did:web`, `did:indy`) alongside `did:agf`.
 
+The `namespace` is descriptive. It does not establish which organisation owns an identity: ownership is the identity registry's record (Spec 08 §3.4), and no decision may infer it from a DID's text.
+
 ### 2.7 Scope Canonicalization
 
 To ensure consistent comparison, all scopes MUST be canonicalized before validation.
@@ -176,7 +178,14 @@ Canonicalization MUST be applied before any scope comparison or intersection ope
 
 ### 3.1 Signature Validation
 
-The token's signature MUST be verified using the public key identified by `kid` in the header. If the key cannot be found or the signature is invalid, the token MUST be rejected.
+The token's signature MUST be verified using a key of the issuer's identity:
+- the `kid` in the header selects a **candidate** key;
+- the key that actually verified the signature MUST be a registered key of the identity named by `iss` (Spec 08 §3.4).
+
+The token MUST be rejected if:
+- no candidate key is found;
+- the signature is invalid;
+- the verifying key is not a key of the issuer (`issuer_key_unbound`, Spec 02 §3.4).
 
 ### 3.2 Expiration
 
@@ -223,7 +232,7 @@ token = jwt.encode(payload, private_key, algorithm="ES256")
 
 ### 4.2 Verification
 
-The verifier resolves the signing key via the `kid` claimed in the JWT header (falling back to a `kid` derived from `iss` if the header omits it — see Spec 08/09 for key resolution), then decodes with the full required-claims list and clock-skew leeway:
+The verifier resolves a candidate signing key via the `kid` claimed in the JWT header (falling back to a `kid` derived from `iss` if the header omits it — see Spec 08/09 for key resolution), then decodes with the full required-claims list and clock-skew leeway. It then confirms that the key that verified the signature is a registered key of the `iss` identity (§3.1):
 
 ```python
 try:
@@ -287,4 +296,4 @@ Verifiers SHOULD allow up to 5 seconds of clock skew when checking `exp` and `ia
 |---------|------|---------|
 | 0.1.0 | 2026-07-12 | Initial public working draft |
 | 0.1.1 | 2026-07-14 | §2.4 `policy_version` claim description corrected (PDP resolves the org's active policy, not "latest") and cross-referenced to Spec 06 §6.5 mismatch surfacing |
-| 0.2.0 | 2026-10-05 | §2.4 `policy_version` claim: a pin evaluated in addition to the organisation's policy, never instead of it; authorized only when it originates in a root token signed by an organisation-designated pinning authority; a later token repeating it unchanged inherits that authorization; a claim introduced or changed in a later token is unauthorized and yields `DENY` (Spec 06 §6.5) |
+| 0.2.0 | 2026-10-05 | §2.4 `policy_version` claim: a pin evaluated in addition to the organisation's policy, never instead of it; authorized only when it originates in a root token signed by an organisation-designated pinning authority; a later token repeating it unchanged inherits that authorization; a claim introduced or changed in a later token is unauthorized and yields `DENY` (Spec 06 §6.5). Federation selection and issuer trust (2026-10-08, draft): §2.6 the DID namespace is descriptive; ownership is the identity registry's record (Spec 08 §3.4). §3.1/§4.2 `kid` selects a candidate key; the key that actually verified the signature must be a registered key of the `iss` identity, otherwise `issuer_key_unbound` |

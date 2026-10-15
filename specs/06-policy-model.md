@@ -444,7 +444,8 @@ A PDP that serves more than one organisation evaluates many organisations' polic
 1. A **selection slot** names the policy revision used for a class of requests:
    - the organisation's active policy;
    - a canary;
-   - an attachment (§5).
+   - an attachment (§5);
+   - a federation selection for one peering (§6.8).
 2. A slot records:
    - the selected revision;
    - the slot's selection metadata (for a canary, its percentage; for an attachment, its action and resource patterns);
@@ -471,6 +472,16 @@ A PDP that serves more than one organisation evaluates many organisations' polic
    - MUST reject a reused identifier with any differing field;
    - MUST NOT infer success from the slot's current contents.
 5. Before a change selects a revision, the PDP MUST confirm the engine holds that revision (§6.7.1 identity check). That confirmation and the change MUST NOT be separable by removal of the revision. Removal MUST take the same mutual exclusion as changes.
+6. **Internal callers.** The caller of a change may be the PDP itself, for example the federation cleanup (Spec 26 §2.3).
+   - An internal caller's operation identifier is derived deterministically, and scoped to exactly one logical request. For the federation cleanup, that is the organisation, the peering, the deactivation record, the slot and the request's sequence number.
+   - The logical request (operation identifier, slot, operation, expected version, target) is persisted before it is first applied.
+   - A retry repeats it exactly (item 4).
+   - A request may be recorded as **superseded** only when both hold:
+     - its expected version no longer matches;
+     - a lookup of its identifier has completed and found **no** recorded change for it.
+
+     If the lookup finds the change, its outcome is adopted. Any further attempt after a supersession is a new request with a new identifier.
+   - A failed or uncertain lookup never permits a new identifier. The same request is retried later.
 
 #### 6.6.4.1 Removing unreferenced revisions from the engine
 
@@ -529,6 +540,42 @@ Each revision MUST carry a reserved identity rule whose value is the revision's 
 2. If the engine loses revisions while the PDP is running (for example, an independent engine restart), affected decisions fail closed (`not_loaded`). The PDP MUST detect the loss, either from those failures or from a periodic comparison of selected and loaded revisions, and MUST reload from the stored module text (§6.6.2).
 3. Organisations without a configured policy are unaffected.
 4. The PDP MUST report not-ready while any selected revision is missing.
+
+### 6.8 Federation Policy Selection
+
+An organisation can name a policy to apply to its own decisions on delegation chains, or Trust Summaries (Spec 26), issued by a federation peer. This is a **federation selection**.
+
+**Ownership.** A federation selection belongs to the organisation whose decisions it affects, and only to that organisation.
+- Each organisation has at most one federation selection per peering, held in its own selection slot `federation:<trust identifier>` (§6.6.3). Every §6.6 control applies: an immutable revision of the organisation's own policy, compare-and-set changes with operation identifiers, and load-before-flip.
+- No selection is shared between organisations. A peer's configuration MUST NOT select, replace or remove a policy for another organisation's decisions.
+- Changing a federation selection is an organisation-administrator action. It is a policy-selection write, subject to any suspension of policy writes. The one exception is the PDP's own cleanup clear of a peering that is no longer active (Spec 26 §2.3 item 8).
+
+**Applicability.**
+- A peering that is not active is denied before any selection is read, whatever its slots hold (Spec 26 §2.1).
+- For a decision on a chain or Trust Summary issued by a peer over an active peering, the organisation's federation selection for that peering applies when one is configured.
+- "That peering" is the one between the requesting organisation and the owner of the chain's root issuer (Spec 02 §3.10). No other peering's selection applies to the decision, even if the requesting organisation has other active peerings.
+- The raw-chain and Trust Summary paths use the same slot. Using the same selection does not make the two paths' results identical. On the Trust Summary path the trust score is adjusted by zone decay (Spec 26 §4), so a policy whose rules depend on the trust score can decide the same request differently on the two paths.
+
+**Combination.** A federation selection is evaluated **in addition to** the mandatory organisation policy (§6.5), never instead of it. It is not a pin.
+- The policy leg is **deny-overrides** across every policy evaluated (the mandatory policy, an applied pin and the federation selection): DENY if any evaluation denies or fails; otherwise the most restrictive result. A `NO_OPINION` contributes nothing.
+- The same revision is evaluated once.
+- With no mandatory policy, the federation selection is still evaluated.
+
+**Slot states.** For a decision, a federation slot is in exactly one of three states:
+
+| State | When | Policy leg |
+|---|---|---|
+| Not configured | Never set, or cleared (§6.6.4 item 2) by an administrator or by the cleanup after the peering stopped being active (Spec 26 §2.3) | The mandatory policy (and an applied pin) only |
+| Configured | The slot selects a revision | The mandatory policy and the federation selection, deny-overrides |
+| Cannot be established | The slot cannot be read; its selected revision cannot be found; the revision cannot be verified; or its evaluation fails | DENY (§6.7.2) |
+
+- An administrator's explicit clear is a valid transition to "not configured". Decisions on that peer's chains and Trust Summaries are then evaluated under the mandatory policy only.
+- A slot that cannot be established MUST NOT be treated as "not configured".
+- A slot that cannot be read, or whose selected revision cannot be found, is recorded with `failure_state: selection_unavailable`. One whose revision cannot be verified, or whose evaluation fails, is recorded with the §6.7.1 state that applies.
+
+**Deletion.** A policy whose revision is selected by a federation slot MUST NOT be deleted (§6.6.2 item 3). The deletion is refused until the slot is cleared or re-pointed. If a configured slot's revision is nevertheless missing (for example, after a restore or a direct storage change), the slot cannot be established, and the decision is DENY.
+
+**Recording.** The decision artifact records the federation evaluation separately (Spec 07 §3.3 `federation`). The top-level provenance remains the mandatory policy's.
 
 ## 7. Policy Testing
 
@@ -652,4 +699,4 @@ Implementations MUST detect and log policy conflicts. When a conflict is detecte
 | 0.1.0 | 2026-07-12 | Initial public working draft |
 | 0.2.0 | 2026-07-14 | §6.5: missing requested policy version must surface in the decide response (`POLICY_VERSION_NOT_FOUND`, `policy_version_requested`/`policy_version_applied`) and the decision is capped at `ALLOW_WITH_CAUTION` (KERNEL-NEG-03, RFC 0001) |
 | 0.3.0 | 2026-09-07 | §3.3 split into §3.3.1 (candidate-policy dry-run, now formally specified with input/output schema) and §3.3.2 (new: live dry-run via `dry_run: true` on `/v1/decide`); added §2.5 Evaluation Explainability (`explain` field) |
-| 0.4.0 | 2026-10-05 | Added §6.6 Policy Isolation and Revision-Bound Evaluation: isolation of the evaluated rules (a namespace per revision; no cross-namespace data references, checked on the parsed policy; pinned built-in allowlist; reserved rule-name prefix); immutable revisions with stored module text and hashes; selection slots whose revision and metadata change atomically, owned by one organisation; revision-bound evaluation; compare-and-set changes with monotonic, never-reset versions and operation identifiers, retries resolved under the same mutual exclusion against the complete recorded request; removal of revisions coordinated with changes, with an enforced decision deadline and retention horizon. Added §6.7 Evaluation Outcomes and Failure: revision identity rule and an ordered result classification; NO_OPINION distinct from no policy configured; fail-closed DENY (never REVIEW_REQUIRED) for every failure state; no stub, default or cached substitute for a configured policy; readiness gated on loaded, verified revisions; detection of and recovery from engine restarts. §2.1 no longer describes a stub fallback for configured policies; §6.5 item 2 points to §6.6. §6.5 rewritten as Policy Version Pinning: the organisation's applicable policy is mandatory and is never disabled or replaced by a requested version. A pin is honoured only when authorized: either the caller permission `policies.pin`, or a root-token claim signed by an organisation-designated pinning authority. An agent's own signature is never authorization. A later token repeating the root's claim unchanged inherits its authorization; an introduced or changed claim is unauthorized. A body pin that differs from an authorized chain pin is a conflict (`DENY`), detected before either version is resolved: the body cannot remove a delegation's pin. An authorized pin is evaluated in addition to the mandatory policy, deny-overrides; §6.4 does not apply to it. Another organisation's version is not found, and is reported identically. Where a mandatory policy applies, a pin that is not found, unauthorized or in conflict is DENY. With no organisation policy, an unauthorized or conflicting pin is DENY, and an authorized pin that is not found keeps the surfaced outcome capped at `ALLOW_WITH_CAUTION` (`requested_version_not_found`). §6.4 carve-out added. §6.1 and the `explain` note no longer describe a stub fallback. Amended (2026-10-07, draft): §6.7.1 failures before any engine response (`selection_unavailable`, `not_verified`); §6.7.2 item 1 covers them; §3.3.1 informative note on dry-run and backtest failure states. Clarified (2026-10-07, draft): §6.5 when a pin outcome is determined; a determined outcome is recorded even when a later failure affects the decision; a decision that ended before any outcome was determined records none, never an invented status; an invalid or revoked chain establishes no pin authorization; the named version stays in the request record. |
+| 0.4.0 | 2026-10-05 | Added §6.6 Policy Isolation and Revision-Bound Evaluation: isolation of the evaluated rules (a namespace per revision; no cross-namespace data references, checked on the parsed policy; pinned built-in allowlist; reserved rule-name prefix); immutable revisions with stored module text and hashes; selection slots whose revision and metadata change atomically, owned by one organisation; revision-bound evaluation; compare-and-set changes with monotonic, never-reset versions and operation identifiers, retries resolved under the same mutual exclusion against the complete recorded request; removal of revisions coordinated with changes, with an enforced decision deadline and retention horizon. Added §6.7 Evaluation Outcomes and Failure: revision identity rule and an ordered result classification; NO_OPINION distinct from no policy configured; fail-closed DENY (never REVIEW_REQUIRED) for every failure state; no stub, default or cached substitute for a configured policy; readiness gated on loaded, verified revisions; detection of and recovery from engine restarts. §2.1 no longer describes a stub fallback for configured policies; §6.5 item 2 points to §6.6. §6.5 rewritten as Policy Version Pinning: the organisation's applicable policy is mandatory and is never disabled or replaced by a requested version. A pin is honoured only when authorized: either the caller permission `policies.pin`, or a root-token claim signed by an organisation-designated pinning authority. An agent's own signature is never authorization. A later token repeating the root's claim unchanged inherits its authorization; an introduced or changed claim is unauthorized. A body pin that differs from an authorized chain pin is a conflict (`DENY`), detected before either version is resolved: the body cannot remove a delegation's pin. An authorized pin is evaluated in addition to the mandatory policy, deny-overrides; §6.4 does not apply to it. Another organisation's version is not found, and is reported identically. Where a mandatory policy applies, a pin that is not found, unauthorized or in conflict is DENY. With no organisation policy, an unauthorized or conflicting pin is DENY, and an authorized pin that is not found keeps the surfaced outcome capped at `ALLOW_WITH_CAUTION` (`requested_version_not_found`). §6.4 carve-out added. §6.1 and the `explain` note no longer describe a stub fallback. Amended (2026-10-07, draft): §6.7.1 failures before any engine response (`selection_unavailable`, `not_verified`); §6.7.2 item 1 covers them; §3.3.1 informative note on dry-run and backtest failure states. Clarified (2026-10-07, draft): §6.5 when a pin outcome is determined; a determined outcome is recorded even when a later failure affects the decision; a decision that ended before any outcome was determined records none, never an invented status; an invalid or revoked chain establishes no pin authorization; the named version stays in the request record. Federation selection (2026-10-08, draft): added §6.8 Federation Policy Selection: one organisation-owned slot per peering (`federation:<trust identifier>`, added to §6.6.3), evaluated in addition to the mandatory policy with deny-overrides, never instead of it; slot states not configured / configured / cannot be established (DENY); a selected policy cannot be deleted; only the root owner's peering applies. §6.6.4 item 6 internal callers: a derived operation identifier scoped to one logical request, the request persisted before it is first applied and repeated exactly, supersession only after a completed lookup finds no recorded change, never on uncertainty |

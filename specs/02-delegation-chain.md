@@ -1,8 +1,8 @@
 # Specification 02: Delegation Chain Semantics
 
-**Version:** 0.3.0 (Draft)  
+**Version:** 0.4.0 (Draft)  
 **Status:** Working Draft  
-**Supersedes:** 0.2.0  
+**Supersedes:** 0.3.0  
 **Layer:** Core format  
 
 ## 1. Introduction
@@ -79,6 +79,11 @@ If any token's `jti` appears in a revocation list, the entire chain is invalid (
 ### 3.4 Signature
 
 Every token's signature MUST be valid against its issuer's public key.
+- The header `kid` selects a **candidate** key only.
+- The key that **actually verified** a token's signature MUST be a registered key of that token's `iss` identity (Spec 08 §3.4).
+- This is checked for **every token**, against that token's own verifying key. It is not checked once per issuer, and not by resolving a key again afterwards.
+
+A token whose verifying key is not a key of its issuer is rejected (`issuer_key_unbound`).
 
 ### 3.5 Scope Inheritance
 
@@ -152,6 +157,35 @@ An implementation may express the table above as a single per-chain budget of `m
 
 A submitted chain MUST NOT contain two tokens with the same `jti`. Verifiers MUST reject such a chain with `INVALID_REQUEST` before scope evaluation. A duplicated token is either a replay artifact or a malformed chain; the continuity rules in §3.1 do not reliably catch self-referential duplicates.
 
+### 3.10 Issuer Trust for the Requesting Organisation
+
+A chain is always evaluated for a **requesting organisation**: the organisation that asks for the decision, revalidation, record or signature. The chain's **root** decides which issuers are permitted. Every token's issuer identity MUST be in the root's permitted set:
+
+| Root issuer | Permitted issuers for every token of the chain |
+|---|---|
+| Owned by the requesting organisation (Spec 08 §3.4) | Only identities owned by the requesting organisation |
+| The PDP's platform identity, when the root's subject is owned by the requesting organisation | The platform identity for the root; only identities owned by the requesting organisation for every later token |
+| Owned by another organisation P, with an **active** peering between the requesting organisation and P (a cross-organisation decision, Spec 26 §2.1) | Only identities owned by the requesting organisation or by P |
+
+A root owned by another organisation without an active peering is denied by Spec 26 §2.1's ordered checks.
+
+**One peer per chain.** A chain has at most one permitted peer: the owner of its root. A peering between the requesting organisation and any other organisation, active or not, does not permit that organisation's issuers in the chain. It does not introduce another policy path either: only the root's peering can supply a federation selection (Spec 06 §6.8).
+
+Any issuer outside the root's permitted set is rejected (`issuer_not_trusted`). In particular:
+- A well-formed identifier and a verifiable signature do not establish trust.
+- Platform signing does not establish trust for any organisation other than the root subject's owner. Platform-mediated federation beyond this requires its own specification.
+
+**Missing or unreadable identities.**
+- An issuer identity that is not registered is rejected (`identity_not_found`).
+- One that cannot be looked up is rejected (`identity_unavailable`).
+- Neither is ever skipped, treated as trusted, or relaxed in any environment. Development and test setups register the identities their fixtures use.
+
+**Scope.** These rules apply on **every path** that accepts a chain, or revalidates it, records it as verified, or signs on its basis. That includes:
+- decisions;
+- revalidation of offline decisions;
+- Trust Summary issuance (Spec 24, Spec 26);
+- proof retrieval.
+
 ## 4. Scope Inheritance Examples
 
 ### Example 1: Narrowing
@@ -189,11 +223,13 @@ When Agent C requests an action, the chain is `[Alice → Agent A → Agent C]`.
 
 ## 6. Chain Validation Algorithm
 
-The current implementation splits this across two layers: a pure `validate_chain()` (structural checks — signature, expiration, continuity, depth, scope, trust score) and an orchestrating decision service that calls it, then separately checks revocation and evaluates constraints. This split exists so structural validation stays a pure domain function testable without a revocation store or constraint context.
+The current implementation splits this across two layers: `validate_chain()` (signature and issuer checks, expiration, continuity, depth, scope, trust score) and an orchestrating decision service that calls it, then separately checks revocation and evaluates constraints.
+
+`validate_chain()` is **not** free of I/O. Besides key resolution, the issuer checks of §3.4 and §3.10 read the identity registry (identity, owner, keys) and, for a cross-organisation chain, the peering. Any of those reads failing is a rejection (`identity_unavailable`, or Spec 26 §2.1's lookup failure), never a pass. The split keeps it free of revocation and constraint state, so it can be tested with registry and peering fixtures, without a revocation store or constraint context.
 
 ```python
-# Layer 1: structural validation (pure — no I/O beyond key resolution)
-def validate_chain(chain, action, audience, key_resolver, current_time):
+# Layer 1: chain validation — no revocation or constraint state; reads keys, the identity registry and, cross-organisation, the peering (§3.4, §3.10)
+def validate_chain(chain, action, audience, key_resolver, registry, requesting_org, current_time):
     effective_scope = None
     explicit_max_depths = []  # (token index, claimed max_depth) — only tokens that supply one
 
@@ -207,6 +243,16 @@ def validate_chain(chain, action, audience, key_resolver, current_time):
         if not result.ok:
             return error(result.error.code, i)
         payload = result.payload
+
+        # 1b. Issuer binding (§3.4) and trust for the requesting organisation (§3.10),
+        #     for THIS token, against the key that actually verified it.
+        identity = registry.lookup(payload.iss)   # unreadable -> identity_unavailable
+        if identity is None:
+            return error("identity_not_found", i)
+        if result.verifying_key not in identity.keys:
+            return error("issuer_key_unbound", i)
+        if not trusted_for(identity, requesting_org, token_index=i, payload=payload):
+            return error("issuer_not_trusted", i)
 
         # 2. Collect this token's explicit max_depth claim, if any. A token
         #    that omits the claim contributes no value to the binding
@@ -244,7 +290,8 @@ def validate_chain(chain, action, audience, key_resolver, current_time):
 
 # Layer 2: orchestration (decide_service) — revocation, reputation, constraints
 def decide(request, current_time):
-    chain_result = validate_chain(request.chain, request.action, request.audience, key_resolver, current_time)
+    chain_result = validate_chain(request.chain, request.action, request.audience, key_resolver,
+                                  registry, request.requesting_org, current_time)
     if not chain_result.valid:
         return deny(chain_result.error)
 
@@ -303,3 +350,4 @@ Implementations MUST monitor validation time and alert if approaching limits. Co
 | 0.1.0 | 2026-07-12 | Initial public working draft |
 | 0.2.0 | 2026-07-15 | Added §3.9: duplicate `jti` within a submitted chain is rejected with `INVALID_REQUEST` (CHAIN-11, KERNEL-NEG-02) |
 | 0.3.0 | 2026-08-09 | §3.6/§6: corrected max_depth binding-limit pseudocode for chains with a mix of explicit and omitted `max_depth` claims — `min(max_depth_i)` ranges only over tokens that explicitly carry the claim; an omitting token never implicitly contributes `DEFAULT_MAX_DEPTH`. No change to the normative formula itself, and no effect on chains where every token supplies an explicit claim. |
+| 0.4.0 | 2026-10-08 | Draft: §3.4 the key that actually verified each token must be a registered key of its issuer, checked per token against its own verifying key (`issuer_key_unbound`). Added §3.10 Issuer Trust for the Requesting Organisation: permitted issuers by root (requester-owned; platform root whose subject the requester owns; a root owned by an actively peered organisation), one peer per chain, `issuer_not_trusted`, `identity_not_found` and `identity_unavailable` in every environment; applies to decisions, offline revalidation, Trust Summary issuance and proof retrieval. §6 chain validation reads the identity registry and peering, and is no longer described as pure |

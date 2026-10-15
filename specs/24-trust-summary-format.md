@@ -1,8 +1,8 @@
 # Specification 24: Trust Summary Format (AGF-TS-1.0)
 
-**Version:** 0.1.0 (Draft)
+**Version:** 0.2.0 (Draft)
 **Status:** Working Draft  
-**Supersedes:** None  
+**Supersedes:** 0.1.0  
 **Layer:** Profile  
 
 ## 1. Introduction
@@ -75,10 +75,18 @@ If a genuinely separate, independently-operated AGF deployment is the issuer (ov
 - **Subject binding.** `subject_org` binds the summary to its intended recipient. Verification fails if the org actually presenting the summary — resolved from the presenting org's own authenticated session, never from a claim inside the summary itself (see Spec 26 §6 for why this check must not be self-referential) — is not `subject_org`.
 - **Multi-use within TTL.** A summary is not single-use or nonced. The presenting org must still separately authenticate its own session for every request it makes; the summary is not a bearer credential on its own. `subject_org` binding is what prevents a different, unintended org from replaying it, not per-use consumption.
 - **Version/canonicalization/hash-algorithm fields must all be recognized values.** Any unrecognized value is a rejection, not a best-effort parse.
+- **Issuance requires a bound and trusted chain.** Before signing, the issuer MUST validate the submitted chain under Spec 02 in full. That includes:
+  - the issuer/key binding of every token, against its actual verifying key (Spec 02 §3.4);
+  - issuer trust for the requesting organisation, the organisation asking for the summary (Spec 02 §3.10).
+
+  Both MUST succeed before anything is signed. Structural validation alone MUST NOT lead to a signature. If either check fails or cannot be completed:
+  - no summary is signed;
+  - nothing is logged for proof retrieval;
+  - the request is refused with the corresponding code (Spec 10 §5.5).
 
 ## 6. Endpoints
 
-- `POST /v1/delegations/summarize` — validates a submitted chain via the normal Spec 02 chain-validation path; on success, builds and signs a Trust Summary. Requires `subject_org`, `action_scope`, `audience` alongside the chain.
+- `POST /v1/delegations/summarize` — validates a submitted chain via the normal Spec 02 chain-validation path, including §3.4 and §3.10 (see §5); on success, builds and signs a Trust Summary. Requires `subject_org`, `action_scope`, `audience` alongside the chain.
 - `POST /v1/delegations/verify-summary` — verifies a summary's signature, version, canonicalization, expiry, and subject binding against a caller-supplied public key. This endpoint's scope is deliberately narrow: it does not perform federation-trust-relationship lookup (Spec 26 §2 covers where that check actually lives, in the `/v1/decide` integration) — it exists so any implementation can check whether a given summary and key are consistent, including for interoperability testing between independent implementations.
 
 ## 7. Relationship to Other Specs
@@ -92,3 +100,4 @@ If a genuinely separate, independently-operated AGF deployment is the issuer (ov
 | Version | Date | Changes |
 |---------|------|---------|
 | 0.1.0 | 2026-07-12 | Initial public working draft |
+| 0.2.0 | 2026-10-08 | Draft: §5 issuance requires a bound and trusted chain: full Spec 02 validation, including per-token issuer/key binding (§3.4) and trust for the requesting organisation (§3.10), before anything is signed; on failure nothing is signed or logged and the request is refused with the Spec 10 code. §6 `summarize` cross-referenced |

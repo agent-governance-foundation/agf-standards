@@ -117,6 +117,31 @@
             }
           }
         },
+        "federation": {
+          "description": "A federation selection's own evaluation (Spec 06 §6.8): the peering and its provenance, under the same rules as the policy block. The top level is the mandatory policy.",
+          "allOf": [
+            {
+              "$ref": "#/$defs/policy_provenance"
+            }
+          ],
+          "required": [
+            "trust_id",
+            "evaluator",
+            "evaluation_status"
+          ],
+          "properties": {
+            "trust_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "evaluation_status": {
+              "enum": [
+                "evaluated",
+                "failed"
+              ]
+            }
+          }
+        },
         "delegation_pin": {
           "type": "string",
           "minLength": 1,
@@ -439,6 +464,23 @@
             "properties": {
               "decision": {
                 "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "$comment": "F1 federation: never with not_evaluated (the policy leg did not run).",
+          "if": {
+            "required": [
+              "federation"
+            ]
+          },
+          "then": {
+            "properties": {
+              "evaluation_status": {
+                "not": {
+                  "const": "not_evaluated"
+                }
               }
             }
           }
