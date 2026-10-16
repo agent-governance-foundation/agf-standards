@@ -1,0 +1,28 @@
+{
+  "id": "dec_1735603300_a1b2c3",
+  "status": "DENY",
+  "qualifiers": [],
+  "action": {
+    "type": "read:calendar",
+    "target": "calendars/alice@acme.com"
+  },
+  "authority_refs": [
+    "del_abc123"
+  ],
+  "policy": {
+    "version": "acme/policies/refunds@1.0.0",
+    "hash": "abc123",
+    "evaluator": "none",
+    "evaluation_status": "policy_required",
+    "decision": "DENY",
+    "requested_version": "acme/policies/refunds@0.9.0",
+    "used_version": null,
+    "pin_status": "not_applied"
+  },
+  "decider": "did:agf:acme:pdp-01",
+  "decided_at": 1735603300,
+  "reasons": [
+    "policy_required",
+    "pin:not_applied"
+  ]
+}

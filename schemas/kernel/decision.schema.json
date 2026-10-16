@@ -87,9 +87,10 @@
             "applied",
             "not_found",
             "unauthorized",
-            "conflict"
+            "conflict",
+            "not_applied"
           ],
-          "description": "not_found includes a version of another organisation, recorded identically (Spec 06 §6.5 item 2)."
+          "description": "not_found includes a version of another organisation, recorded identically (Spec 06 §6.5 item 2). not_applied: the version exists but was not evaluated, because the organisation is policy-required and has no active policy (Spec 06 §6.7.1, RR-0017); only with evaluation_status policy_required."
         },
         "pin_authorization": {
           "enum": [
@@ -285,14 +286,15 @@
           }
         },
         {
-          "$comment": "P6 not applied: used_version null, no authorization or pinned provenance, the policy leg not run.",
+          "$comment": "P6 not applied: used_version null, no authorization or pinned provenance, the policy leg not run (or, policy_required, nothing evaluated).",
           "if": {
             "properties": {
               "pin_status": {
                 "enum": [
                   "not_found",
                   "unauthorized",
-                  "conflict"
+                  "conflict",
+                  "not_applied"
                 ]
               }
             },
@@ -310,7 +312,8 @@
                   "evaluation_status": {
                     "enum": [
                       "not_evaluated",
-                      "requested_version_not_found"
+                      "requested_version_not_found",
+                      "policy_required"
                     ]
                   }
                 }
@@ -335,7 +338,7 @@
           }
         },
         {
-          "$comment": "P7 an unauthorized or conflicting pin is always DENY before the policy leg.",
+          "$comment": "P7 an unauthorized or conflicting pin is always DENY before the policy leg (not_evaluated), or DENY because no policy is active (policy_required).",
           "if": {
             "properties": {
               "pin_status": {
@@ -352,7 +355,10 @@
           "then": {
             "properties": {
               "evaluation_status": {
-                "const": "not_evaluated"
+                "enum": [
+                  "not_evaluated",
+                  "policy_required"
+                ]
               }
             }
           }
@@ -469,7 +475,7 @@
           }
         },
         {
-          "$comment": "F1 federation: never with not_evaluated (the policy leg did not run).",
+          "$comment": "F1 federation: never with not_evaluated or policy_required (the policy leg did not run).",
           "if": {
             "required": [
               "federation"
@@ -479,8 +485,57 @@
             "properties": {
               "evaluation_status": {
                 "not": {
-                  "const": "not_evaluated"
+                  "enum": [
+                    "not_evaluated",
+                    "policy_required"
+                  ]
                 }
+              }
+            }
+          }
+        },
+        {
+          "$comment": "P11 not_applied belongs only to policy_required (RR-0017): a found pin is never evaluated in place of an active policy.",
+          "if": {
+            "properties": {
+              "pin_status": {
+                "const": "not_applied"
+              }
+            },
+            "required": [
+              "pin_status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "evaluation_status": {
+                "const": "policy_required"
+              }
+            },
+            "required": [
+              "evaluation_status"
+            ]
+          }
+        },
+        {
+          "$comment": "P12 policy_required (Spec 06 §6.7.1, RR-0017): the organisation must have an active policy and has none; the policy leg is DENY, nothing is evaluated.",
+          "if": {
+            "properties": {
+              "evaluation_status": {
+                "const": "policy_required"
+              }
+            },
+            "required": [
+              "evaluation_status"
+            ]
+          },
+          "then": {
+            "required": [
+              "decision"
+            ],
+            "properties": {
+              "decision": {
+                "const": "DENY"
               }
             }
           }
@@ -533,7 +588,8 @@
             "failed",
             "not_configured",
             "requested_version_not_found",
-            "not_evaluated"
+            "not_evaluated",
+            "policy_required"
           ]
         },
         "failure_state": {
@@ -944,7 +1000,8 @@
                 "enum": [
                   "not_configured",
                   "requested_version_not_found",
-                  "not_evaluated"
+                  "not_evaluated",
+                  "policy_required"
                 ]
               }
             },

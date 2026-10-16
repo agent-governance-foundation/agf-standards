@@ -1,6 +1,6 @@
 # Specification 06: Policy Model and Versioning
 
-**Version:** 0.4.0 (Draft)  
+**Version:** 0.5.0 (Draft)  
 **Status:** Working Draft  
 **Supersedes:** 0.3.0  
 **Layer:** Core format  
@@ -77,16 +77,51 @@ valid_delegation_chain {
 }
 ```
 
+#### 2.3.1 Declared amount
+
+The PDP MAY supply `amount`, the amount and currency the request declares, normalized once per request
+and independent of any policy:
+
+```json
+"amount": {"status": "ok", "minor_units": 100000, "currency": "INR"}
+```
+
+- `status` is one of `ok`, `missing`, `malformed`, `conflicting`, `currency_missing`. `minor_units`
+  (an integer) and `currency` (an ISO 4217 code) are present only when `status` is `ok`, and are null
+  otherwise.
+- Amounts are declared in major units: a non-negative integer, or a decimal string with at most the
+  currency's ISO 4217 exponent of fraction digits. They are converted to integer minor units (₹1,000 in
+  INR is 100000), at most 2^53 − 1. Floats, exponents, signs, booleans and any other value are
+  `malformed`. A missing amount is `missing`, never zero.
+- Each source the PDP reads (for example, the request context and the resource's query) is a pair of
+  amount and currency from that same source; a currency is never taken from another source. A
+  repeated query parameter is `malformed`. Where several apply, the first of `malformed`,
+  `currency_missing`, `conflicting` (two complete sources that differ), `missing` is the status.
+- The amount is **what the caller declared**. Normalizing it does not verify a transaction amount, and
+  a decision MUST NOT be described as verifying one.
+
 ### 2.4 Output Format
 
 ```json
 {
   "allow": true,
   "allow_with_caution": false,
+  "review_required": false,
   "deny": false,
   "reason": ["valid_delegation_chain", "risk_score < 70"]
 }
 ```
+
+The decision members are booleans. They are read in the order `deny`, `review_required`,
+`allow_with_caution`, `allow`: the first that is true is the policy's outcome (DENY, REVIEW_REQUIRED,
+ALLOW_WITH_CAUTION, ALLOW); if none is true the policy expresses no opinion (§6.7.1). A policy outcome of
+`REVIEW_REQUIRED` merges with trust and risk exactly as a risk REVIEW_REQUIRED does: below any DENY,
+above ALLOW_WITH_CAUTION. It maps to the kernel status `REVIEW_REQUIRED` (Spec 00 §4.2), and it is
+eligible for human approval like any other REVIEW_REQUIRED decision (Spec 15).
+
+`reason` is optional: a list of short strings naming why the policy decided as it did. The PDP records
+the strings in the decision's reasoning. `reason` never affects the outcome; a value that is not a list,
+and entries that are not non-empty strings, are ignored.
 
 ### 2.5 Evaluation Explainability
 
@@ -358,7 +393,7 @@ Any other pin is **unauthorized**. That includes a claim introduced or changed i
 
 1. **An authorized pin of a version that exists for the organisation** is evaluated **in addition to** the mandatory policy, never instead of it. Both are evaluated, each bound to its own revision (§6.6.3 item 5) and each under §6.7, including fail-closed DENY. A pinned revision that is also the mandatory revision is evaluated once. The policy leg is **deny-overrides**:
    - DENY if either evaluation denies or fails;
-   - otherwise the more restrictive of the two results, in the order `REVIEW_REQUIRED`, `ALLOW_WITH_CAUTION`, `ALLOW`. A `NO_OPINION` contributes nothing.
+   - otherwise the more restrictive of the two results, in the order `REVIEW_REQUIRED`, `ALLOW_WITH_CAUTION`, `ALLOW` (`REVIEW_REQUIRED` including a policy's own outcome, §2.4). A `NO_OPINION` contributes nothing.
 
    §6.4 does not apply between a pin and the mandatory policy, whichever version is newer. A pin can tighten the outcome. It cannot loosen the mandatory policy. With no mandatory policy, the authorized pin is the only policy evaluated.
 2. **No fallback, no disclosure.** A pinned version that does not exist selects no revision. The PDP MUST NOT fall back to any other version in its place, and does not query the engine for it. Versions are resolved only within the requesting organisation, so a version of another organisation is **not found**. It MUST be reported and recorded exactly as a version that does not exist, which keeps the existence of other organisations' versions undisclosed. Isolation applies to the rules actually evaluated, not only to the version selected (§6.6). This matters in multi-tenant deployments where a policy engine or directory is shared across organisations: falling back to "whatever policy sorts last" would risk evaluating one organisation's request against another organisation's policy.
@@ -508,8 +543,8 @@ Each revision MUST carry a reserved identity rule whose value is the revision's 
 | 7 | Result lacks the identity rule | failed: `not_loaded` | DENY |
 | 8 | Identity rule present but not a string | failed: `malformed` | DENY |
 | 9 | Identity rule is a string other than the expected revision identifier | failed: `revision_mismatch` | DENY |
-| 10 | Any of `allow`, `deny`, `allow_with_caution` present but not a boolean | failed: `malformed` | DENY |
-| 11 | Otherwise | evaluated | `deny` true → DENY; else `allow_with_caution` true → ALLOW_WITH_CAUTION; else `allow` true → ALLOW; otherwise NO_OPINION |
+| 10 | Any of `allow`, `deny`, `allow_with_caution`, `review_required` present but not a boolean | failed: `malformed` | DENY |
+| 11 | Otherwise | evaluated | `deny` true → DENY; else `review_required` true → REVIEW_REQUIRED; else `allow_with_caution` true → ALLOW_WITH_CAUTION; else `allow` true → ALLOW; otherwise NO_OPINION |
 
 **Failures before any engine response.** Two further failure states occur before the engine is queried, and are classified like the rows above (§6.7.2 applies to both):
 - **`selection_unavailable`**: the decision's selection could not be read (for example, the store holding the slots failed). No revision was selected and the engine is not queried. The PDP MUST NOT fall back to another slot, to "no policy configured", or to any other revision. Policy leg: DENY.
@@ -517,6 +552,12 @@ Each revision MUST carry a reserved identity rule whose value is the revision's 
 
 - **NO_OPINION** means a configured policy legitimately expressed no decision. It merges with trust and risk exactly as `NOT_APPLICABLE` does (§6.1). It is recorded distinctly from "no policy configured" (Spec 07 §3.3).
 - When the organisation has **no policy configured** for the request, the PDP does not query the engine for it, and the policy leg is `NOT_APPLICABLE`. An authorized pin is still evaluated (§6.5 item 1).
+- **Policy required.** An organisation MAY be designated as requiring an active policy. When such an organisation has no policy selected for the request, the policy leg is DENY, recorded as `policy_required` (Spec 07 §3.3), with the error code `POLICY_REQUIRED` (Spec 10 §5.5):
+  - nothing is evaluated: not the engine, not a pinned version. A pin never substitutes for an active policy. A pin outcome that was determined is still recorded; a pin that exists is recorded as `not_applied`;
+  - the DENY is final, like a fail-closed DENY (§6.7.2): neither human approval nor an emergency override applies to it;
+  - if the PDP cannot read whether the organisation requires a policy, the decision fails closed as `selection_unavailable`;
+  - for an organisation with an active policy, and for one that is not designated, nothing in this section changes.
+  How an organisation comes to be designated is deployment policy; changing it SHOULD be an attributed, recorded operator action.
 
 **Pinned versions** (§6.5). A pinned version is evaluated only when the pin is authorized, and always in addition to the mandatory organisation policy, never instead of it.
 - **Authorized, and the version exists for the organisation:** its revision is a selected revision for this decision. Revision-bound evaluation (§6.6.3 item 5) and this section apply exactly as for any configured policy, including fail-closed DENY for every failure state. The mandatory policy, when there is one, is evaluated as well.
@@ -700,3 +741,4 @@ Implementations MUST detect and log policy conflicts. When a conflict is detecte
 | 0.2.0 | 2026-07-14 | §6.5: missing requested policy version must surface in the decide response (`POLICY_VERSION_NOT_FOUND`, `policy_version_requested`/`policy_version_applied`) and the decision is capped at `ALLOW_WITH_CAUTION` (KERNEL-NEG-03, RFC 0001) |
 | 0.3.0 | 2026-09-07 | §3.3 split into §3.3.1 (candidate-policy dry-run, now formally specified with input/output schema) and §3.3.2 (new: live dry-run via `dry_run: true` on `/v1/decide`); added §2.5 Evaluation Explainability (`explain` field) |
 | 0.4.0 | 2026-10-05 | Added §6.6 Policy Isolation and Revision-Bound Evaluation: isolation of the evaluated rules (a namespace per revision; no cross-namespace data references, checked on the parsed policy; pinned built-in allowlist; reserved rule-name prefix); immutable revisions with stored module text and hashes; selection slots whose revision and metadata change atomically, owned by one organisation; revision-bound evaluation; compare-and-set changes with monotonic, never-reset versions and operation identifiers, retries resolved under the same mutual exclusion against the complete recorded request; removal of revisions coordinated with changes, with an enforced decision deadline and retention horizon. Added §6.7 Evaluation Outcomes and Failure: revision identity rule and an ordered result classification; NO_OPINION distinct from no policy configured; fail-closed DENY (never REVIEW_REQUIRED) for every failure state; no stub, default or cached substitute for a configured policy; readiness gated on loaded, verified revisions; detection of and recovery from engine restarts. §2.1 no longer describes a stub fallback for configured policies; §6.5 item 2 points to §6.6. §6.5 rewritten as Policy Version Pinning: the organisation's applicable policy is mandatory and is never disabled or replaced by a requested version. A pin is honoured only when authorized: either the caller permission `policies.pin`, or a root-token claim signed by an organisation-designated pinning authority. An agent's own signature is never authorization. A later token repeating the root's claim unchanged inherits its authorization; an introduced or changed claim is unauthorized. A body pin that differs from an authorized chain pin is a conflict (`DENY`), detected before either version is resolved: the body cannot remove a delegation's pin. An authorized pin is evaluated in addition to the mandatory policy, deny-overrides; §6.4 does not apply to it. Another organisation's version is not found, and is reported identically. Where a mandatory policy applies, a pin that is not found, unauthorized or in conflict is DENY. With no organisation policy, an unauthorized or conflicting pin is DENY, and an authorized pin that is not found keeps the surfaced outcome capped at `ALLOW_WITH_CAUTION` (`requested_version_not_found`). §6.4 carve-out added. §6.1 and the `explain` note no longer describe a stub fallback. Amended (2026-10-07, draft): §6.7.1 failures before any engine response (`selection_unavailable`, `not_verified`); §6.7.2 item 1 covers them; §3.3.1 informative note on dry-run and backtest failure states. Clarified (2026-10-07, draft): §6.5 when a pin outcome is determined; a determined outcome is recorded even when a later failure affects the decision; a decision that ended before any outcome was determined records none, never an invented status; an invalid or revoked chain establishes no pin authorization; the named version stays in the request record. Federation selection (2026-10-08, draft): added §6.8 Federation Policy Selection: one organisation-owned slot per peering (`federation:<trust identifier>`, added to §6.6.3), evaluated in addition to the mandatory policy with deny-overrides, never instead of it; slot states not configured / configured / cannot be established (DENY); a selected policy cannot be deleted; only the root owner's peering applies. §6.6.4 item 6 internal callers: a derived operation identifier scoped to one logical request, the request persisted before it is first applied and repeated exactly, supersession only after a completed lookup finds no recorded change, never on uncertainty |
+| 0.5.0 | 2026-10-16 | RR-0017 (draft): §2.4 a policy can require human approval (`review_required`, read after `deny`, merging like a risk REVIEW_REQUIRED, kernel `REVIEW_REQUIRED`), and its optional `reason` strings are recorded without affecting the outcome; §6.7.1 row 10 and 11 include `review_required`. §2.3.1 the declared amount input (`amount`: status, integer minor units, currency; caller-declared, never verified; missing is never zero). §6.7.1 policy-required organisations: with no policy selected the policy leg is DENY (`policy_required`, `POLICY_REQUIRED`), final, nothing evaluated, a pin never substitutes for an active policy. |

@@ -1,0 +1,29 @@
+{
+  "id": "dec_1735603300_a1b2c3",
+  "status": "REVIEW_REQUIRED",
+  "qualifiers": [],
+  "action": {
+    "type": "read:calendar",
+    "target": "calendars/alice@acme.com"
+  },
+  "authority_refs": [
+    "del_abc123"
+  ],
+  "policy": {
+    "version": "acme/policies/refunds@1.0.0",
+    "hash": "abc123",
+    "evaluator": "engine",
+    "evaluation_status": "evaluated",
+    "decision": "REVIEW_REQUIRED",
+    "revision_id": "7f3a9c00-0000-4000-8000-000000000001",
+    "module_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "query_path": "agf/rev/r_7f3a9c0000004000800000000000001",
+    "identity_seen": "7f3a9c00-0000-4000-8000-000000000001"
+  },
+  "decider": "did:agf:acme:pdp-01",
+  "decided_at": 1735603300,
+  "reasons": [
+    "review_required",
+    "rule:1:review"
+  ]
+}
