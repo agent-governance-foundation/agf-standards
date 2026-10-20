@@ -16,6 +16,8 @@ The full suite is not yet published; Spec 11 describes the target. Until the sui
 
 **Worked examples:** [scenarios/revocation-race-window/](scenarios/revocation-race-window/) is a full synthetic trace (delegation chain, revocation, decision, execution and settlement/reconciliation artifacts) illustrating one of the not-yet-automated behavioral vectors — a revocation that becomes effective between decision and execution but is only observed afterward (KERNEL-NEG-04-adjacent). It is prose analysis, not a runnable fixture; useful for readers reasoning about what AGF's signed artifacts do and don't prove.
 
+**Revocation behavior cases:** [scenarios/revocation-behavior-cases/narrative.md](scenarios/revocation-behavior-cases/narrative.md) specifies three additional reviewable cases for branch cuts, execution-time validation, and concurrent revocations. These are prose test cases, not runnable fixtures; the conformance harness has not yet been published.
+
 ## Trademark note
 
 Implementing the specifications is free and requires no permission (see [LICENSE](../LICENSE)). Using AGF conformance marks in marketing is contingent on passing the published suite once it exists — this is how the ecosystem keeps "conformant" meaningful.
