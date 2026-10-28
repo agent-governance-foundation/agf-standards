@@ -696,8 +696,9 @@ Agent Deployer wants to execute a production deployment at 10:00 AM.
 | Revoked delegation | Trust | 400 | Reject chain |
 | Constraint violation | Trust | 400 | Reject chain |
 | Scope insufficient | Trust | 403 | Reject action |
-| Revocation list stale (1–24h) | Trust | 200 (with penalty) | Cap to `ALLOW_WITH_CAUTION` |
-| Revocation list stale (> 24h) | Trust | 500 | Reject; must refresh |
+| Revocation list stale (up to 1h) | Trust | 200 (with penalty) | −20 trust penalty; outcome otherwise unchanged |
+| Revocation list stale (1h to `max_stale_seconds`) | Trust | 200 (with penalty) | −20 trust penalty; `ALLOW` becomes `ALLOW_WITH_CAUTION`; stricter outcomes unchanged |
+| Revocation list stale (beyond `max_stale_seconds`), or no valid list | Trust | 500 | Reject; must refresh |
 | Policy version not found | Policy | 404 | Fallback or reject |
 | PDP unavailable | Decision | 503 | Retry with backoff; fallback to local cache |
 | Audit service unavailable | Audit | 500 | Log locally; sync later |

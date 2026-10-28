@@ -1,8 +1,8 @@
 # Specification 11: Conformance Test Suite
 
-**Version:** 0.5.0 (Draft)  
+**Version:** 0.6.0 (Draft)  
 **Status:** Working Draft  
-**Supersedes:** 0.4.1  
+**Supersedes:** 0.5.0  
 **Layer:** Operational  
 
 ## 1. Introduction
@@ -58,7 +58,7 @@ Conformance testing ensures implementations correctly follow the specifications.
 | TRUST-04 | Depth 3 + age 4h → score 82 | 82 |
 | TRUST-05 | Revoked delegation → score 0 | 0 |
 | TRUST-06 | Expired delegation → score 0 | 0 |
-| TRUST-07 | Stale revocation list → −20 penalty | 80 − 20 = 60 |
+| TRUST-07 | Stale revocation list (0 < *s* ≤ `max_stale_seconds`, Spec 05 §5.4) → −20 penalty | 80 − 20 = 60 |
 | TRUST-08 | Trust score never below 0 | `max(0, score)` |
 
 ### 3.4 Revocation Tests (Level 2)
@@ -69,10 +69,16 @@ Conformance testing ensures implementations correctly follow the specifications.
 | REVOKE-02 | Check revoked delegation | `is_revoked = true` |
 | REVOKE-03 | Branch cut: parent revoked | child also revoked |
 | REVOKE-04 | Branch cut: sibling not affected | sibling not revoked |
-| REVOKE-05 | Revocation list stale (< 1h) | warning, still usable |
-| REVOKE-06 | Revocation list expired (> 1h) | fail, must refresh |
+| REVOKE-05 | Revocation list stale, 0 < *s* ≤ 3600 s and *s* ≤ `max_stale_seconds`, refresh failed (Spec 05 §5.4) | −20 trust penalty; outcome otherwise unchanged |
+| REVOKE-06 | Revocation list stale, 3600 s < *s* ≤ `max_stale_seconds`, refresh failed | −20 trust penalty; an `ALLOW` outcome becomes `ALLOW_WITH_CAUTION` |
 | REVOKE-07 | Revocation list signature invalid | fail |
 | REVOKE-08 | Multiple revocations in list | all correctly detected |
+| REVOKE-09 | Revocation list stale, *s* > `max_stale_seconds` | REJECT (`DENY`) |
+| REVOKE-10 | No valid list ever loaded, or source absent, unreadable or invalid with no previously valid list | REJECT (`DENY`); never treated as an empty set of revocations |
+| REVOKE-11 | Boundaries: *s* = 0 is not stale; *s* = 3600 is in the first tier; *s* = 3601 is in the second tier (when `max_stale_seconds` ≥ 3601); *s* = `max_stale_seconds` is accepted; *s* = `max_stale_seconds` + 1 is rejected; with `max_stale_seconds` = 3600, *s* = 3601 is rejected; with `max_stale_seconds` = 0, *s* = 1 is rejected | as stated |
+| REVOKE-12 | Previously valid list, refresh fails or returns a list that is itself stale | staleness tiers apply; REJECT only when *s* > `max_stale_seconds` |
+| REVOKE-13 | Second-tier staleness with an otherwise `REVIEW_REQUIRED` or `DENY` outcome | outcome unchanged |
+| REVOKE-14 | Decision requested while a refresh is pending or retrying | decided on the last valid list without waiting; a list obtained afterwards does not change that decision |
 
 ### 3.5 Risk Layer Tests (Level 2)
 
@@ -288,3 +294,4 @@ Overall: 75/77 passed (97.4%)
 | 0.4.0 | 2026-07-15 | Added CHAIN-11 and §3.12 RECEIPT-01…07; KERNEL-NEG-05 concretized to the two-stage verification violation codes |
 | 0.4.1 | 2026-10-01 | KERNEL-NEG-02 row: the approved-execution exception (Spec 30 §3.5, Spec 00 0.3.2) |
 | 0.5.0 | 2026-10-05 | POLICY-08 to POLICY-10 and KERNEL-NEG-03 updated for Spec 06 §6.5 Policy Version Pinning; added POLICY-11 to POLICY-20: overrides by request body and by agent-signed token claim, nonexistent and foreign versions, an existing permissive version, deny-overrides with a stricter pin, an unauthorized pin with no organisation policy, an unchanged repetition of an authorized root claim, and a body pin that conflicts with or repeats it |
+| 0.6.0 | 2026-10-28 | Revocation staleness aligned with Spec 05 §5.4: TRUST-07 and REVOKE-05/06 restated; added REVOKE-09 to REVOKE-14 (rejection beyond `max_stale_seconds`, no valid list, tier boundaries, previously valid list with failed refresh, second tier never relaxes a stricter outcome, asynchronous refresh) |

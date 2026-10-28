@@ -1,8 +1,8 @@
 # Specification 05: Revocation and Branch Cut Model
 
-**Version:** 0.3.0 (Draft)  
+**Version:** 0.4.0 (Draft)  
 **Status:** Working Draft  
-**Supersedes:** 0.2.0  
+**Supersedes:** 0.3.0  
 **Layer:** Core format  
 
 ## 1. Introduction
@@ -186,20 +186,24 @@ Revocation lists SHOULD be cached with TTL based on `valid_until`. Verifiers MUS
 
 ### 5.4 Stale List Handling
 
-If the revocation list is stale (`valid_until < current_time`):
+A revocation list is **stale** when `valid_until < current_time`. Its **staleness** is `current_time − valid_until`, in whole seconds. Staleness is measured from `valid_until`, not from the time the list was fetched or cached. A list is not stale at `current_time == valid_until`.
 
-1. Attempt to fetch a fresh list (retry up to 3 times with exponential backoff)
-2. If fetch fails, apply the staleness policy based on how old the list is:
+If the revocation list is stale:
 
-| Staleness | Behavior |
-|-----------|----------|
-| > 0s but ≤ 3600s (1 hour) | Apply −20 trust penalty; decisions proceed at their normal outcome |
-| > 3600s but ≤ 86400s (1–24 hours) | Apply −20 trust penalty; decision outcome capped at `ALLOW_WITH_CAUTION` regardless of risk score |
-| > 86400s (24 hours) | **REJECT** — list too stale to rely upon |
+1. Seek a fresh list. This attempt MUST NOT delay a decision. Refresh attempts are performed asynchronously, are bounded (at most 3 attempts with exponential backoff per refresh cycle), and are rate-limited so that a failing source is not retried continuously. A fetch that returns a list that is itself stale, or that fails validation, is a failed fetch.
+2. Until a fresh list is obtained, every decision uses the last valid list the verifier holds and applies the staleness policy below, using that list's staleness at decision time. A decision never waits for a refresh in progress, and a list obtained after a decision does not change that decision. This does not permit a list to be used indefinitely: the staleness tiers and `max_stale_seconds` apply to every decision, a list whose staleness exceeds `max_stale_seconds` is rejected, and a verifier that holds no previously valid list MUST reject (see **No valid list** below).
 
-The cap to `ALLOW_WITH_CAUTION` in the 1–24 hour window prevents high-risk actions from receiving an `ALLOW` outcome while revocation state is uncertain, without completely halting operations.
+| Staleness *s* | Behavior |
+|---------------|----------|
+| 0 < *s* ≤ 3600 s (and *s* ≤ `max_stale_seconds`) | Apply −20 trust penalty; the decision outcome is otherwise unchanged |
+| 3600 s < *s* ≤ `max_stale_seconds` | Apply −20 trust penalty; an outcome of `ALLOW` is changed to `ALLOW_WITH_CAUTION`. Any other outcome — `ALLOW_WITH_CAUTION`, `REVIEW_REQUIRED` or `DENY` — is unchanged |
+| *s* > `max_stale_seconds` | **REJECT** — the decision is `DENY`; the list is too stale to rely upon |
 
-The `max_stale_seconds` configuration controls the REJECT threshold (default: 86400). Operators in high-security environments SHOULD reduce this to 3600.
+`max_stale_seconds` (default: 86400) sets the REJECT threshold. It MUST be between 0 and 86400 inclusive. The 3600-second boundary is fixed. When `max_stale_seconds` is 3600 or less, the second row is empty.
+
+The second row prevents a high-risk action from receiving a plain `ALLOW` while revocation state is uncertain, without completely halting operations. It is applied after the decision is determined and never makes an outcome less restrictive. Operators in high-security environments SHOULD reduce `max_stale_seconds` to 3600.
+
+**No valid list.** A verifier that has never loaded a valid revocation list, or whose configured source is absent, unreadable or invalid and that holds no previously valid list, MUST REJECT. This is a separate condition from the staleness policy above, which applies only to a previously valid list. An absent, unreadable or empty source MUST NOT be treated as a list with no revocations.
 
 ### 5.5 Bounded Propagation Guarantees
 
@@ -353,6 +357,8 @@ propagation_monitoring:
     stale_list_encounters > 10/hour: SEV-3
 ```
 
+A **stale-list encounter** is one detection of a stale list (§5.4) by a verifier in a **refresh cycle**: the whole group of attempts made to obtain a fresh list (§5.4, step 1; at most 3 attempts). A cycle counts as one encounter if the verifier holds a stale list, or no valid list, at the start or at the end of the cycle, however many attempts the cycle makes. An encounter is not counted per individual attempt and not per decision. Implementations SHOULD additionally record, separately, the decisions affected by a stale list.
+
 ## 9. Change Log
 
 | Version | Date | Changes |
@@ -360,3 +366,4 @@ propagation_monitoring:
 | 0.1.0 | 2026-07-12 | Initial public working draft |
 | 0.2.0 | 2026-07-14 | Added §4.3.1 normative Invalidation mapping to the AAP-Core kernel `cause` enum (Spec 00, RFC 0001) |
 | 0.3.0 | 2026-07-15 | Added `behavioral_drift` reason (→ kernel `policy_drift`, §4.3.1) and optional `evidence` field on revocation entries (Spec 00 §3.6) |
+| 0.4.0 | 2026-10-28 | §5.4: staleness measured from `valid_until`; inclusive tier boundaries; `max_stale_seconds` bounded to 0–86400; asynchronous, bounded refresh that never delays a decision; the second tier changes only an `ALLOW` outcome; a verifier with no valid list MUST reject. §8.6: a stale-list encounter is counted once per refresh cycle, not per attempt or per decision |
