@@ -1,6 +1,6 @@
 # Specification 10: API Protocol
 
-**Version:** 0.7.0 (Draft)  
+**Version:** 0.7.1 (Draft)  
 **Status:** Working Draft  
 **Supersedes:** 0.4.1  
 **Layer:** Core format  
@@ -86,7 +86,8 @@ A client integrating against this single error envelope should also expect two f
 | `CHAIN_BROKEN` | 400 | Delegation chain discontinuity |
 | `SCOPE_INSUFFICIENT` | 403 | Scope doesn't cover action |
 | `NOT_FOUND` | 404 | Resource not found |
-| `REVOCATION_LIST_FAILED` | 500 | Could not fetch revocation list |
+| `REVOCATION_LIST_FAILED` | 500 | Decision: the revocation list is absent, unreadable, invalid, or staler than `max_stale_seconds` (Spec 05 §5.4). The response carries a `DENY` decision and a decision artifact exists |
+| `REVOCATION_LIST_FAILED` | 503 | Execution-time validation: the same condition (Spec 30 §3.6). The check returns no `valid` or `invalid` result and creates no Execution Validation Record. Nothing is dispatched |
 | `INTERNAL_ERROR` | 500 | Unexpected error |
 | `APPROVAL_NOT_ESTABLISHED` | 403 | Approved execution: no verified approval request record and 1.1 approval attestation for the named approval (Spec 30 §3.5.4) |
 | `APPROVAL_NOT_GRANTED` | 403 | Approved execution: the attested outcome is not a grant (Spec 30 §3.5.4) |
@@ -485,3 +486,4 @@ Response:
 | 0.6.0 | 2026-10-12 | §4.3: `POLICY_ACTIVATION_UNCERTAIN` describes the unknown outcome precisely (a lost commit result, or a database failure other than a lock timeout while obtaining the organisation's mutual exclusion); a lock timeout is now `POLICY_LOCK_TIMEOUT` (503: this request applied nothing; an earlier request with the same operation identifier may still commit). Added `FEDERATION_PEERING_LOCK_TIMEOUT` and `FEDERATION_LIFECYCLE_LOCK_TIMEOUT` (503, nothing applied). §4.4: retry rows for the three lock codes (identical request, same operation identifier) |
 | 0.6.1 | 2026-10-13 | §4.3: policy-change refusal codes `POLICY_NOT_FOUND` (404), `POLICY_NOT_MERGED` and `POLICY_APPROVAL_REQUIRED` (409), `CANARY_PERCENTAGE_OUT_OF_RANGE` and `CANARY_POLICY_ALREADY_ACTIVE` (400), `POLICY_NO_ACTIVE_POLICY`, `POLICY_NO_ROLLBACK_TARGET` and `POLICY_ROLLBACK_TARGET_NOT_ELIGIBLE` (409), each stating whether it is checked before or after the operation identifier is resolved. §4.4: what such a refusal means for a retry (a before-resolution refusal is never the outcome of an earlier request). Identity names (2026-10-14, draft): §4.3 adds `IDENTITY_NAME_TAKEN` (409) |
 | 0.7.0 | 2026-10-16 | RR-0017 (draft): §5.5 `POLICY_REQUIRED` (`DENY`, final) for an organisation that requires an active policy and has none; it is the response's single `error_code` when a pin outcome was also determined, with the pin kept in `policy_version_requested`/`policy_version_applied` and the signed policy block. §4.3: `TIER_UPGRADE_REQUIRED` (403), a capability the organisation's plan does not include. |
+| 0.7.1 | 2026-10-28 | §4.3: `REVOCATION_LIST_FAILED` listed for both decision time (500, `DENY`) and execution-time validation (503, no result, no record) |

@@ -1,6 +1,6 @@
 # Specification 30: Execution-Time Authorization Validation
 
-**Version:** 0.3.0 (Draft)  
+**Version:** 0.3.1 (Draft)  
 **Status:** Working Draft — §3-6 (the execution-time check, its API contract, and optional gateway
 integration) has a reference implementation, reachable both as a direct API call for custom Policy
 Enforcement Points and via at least one client SDK.  
@@ -262,7 +262,11 @@ operational state, not evidence.
 **Errors** (Spec 10 §4.3): `APPROVAL_NOT_ESTABLISHED`, `APPROVAL_NOT_GRANTED`, `APPROVAL_EXPIRED`,
 `APPROVAL_NOT_BINDABLE`, `APPROVAL_CALLER_MISMATCH` (403); `APPROVAL_REQUEST_MISMATCH`,
 `APPROVAL_CONSUMED` (409); `APPROVAL_CLAIM_UNCERTAIN`, `EXECUTION_EVIDENCE_UNAVAILABLE`,
-`EXECUTION_VALIDATION_STALE` (503).
+`EXECUTION_VALIDATION_STALE`, `REVOCATION_LIST_FAILED` (503).
+
+### 3.6 Unknown revocation state
+
+If revocation state cannot be relied on under Spec 05 §5.4 (no valid list, or a list staler than `max_stale_seconds`), execution-time validation MUST fail with `REVOCATION_LIST_FAILED` (HTTP status 503). It MUST NOT return a `valid` result, MUST NOT return an `invalid` result, and MUST NOT create an Execution Validation Record: a failure to establish revocation state is not a finding that an Authority is invalid, and neither outcome may be substituted for the other. The caller MUST NOT dispatch. On the approved-execution path (§3.5), the failure MUST occur before the claim operation. The claim MUST NOT be created, and the approval MUST remain unconsumed.
 
 ## 4. Execution Validation Record
 
@@ -413,3 +417,4 @@ signing key.
 | 0.1.1 | 2026-08-25 | §3-6 has a reference implementation, reachable directly and via at least one client SDK. |
 | 0.2.0 | 2026-09-30 | §4: Execution Validation Records are signed (Spec 07 §11.6); signing-failure behaviour and the executed-after-failed-validation rule referenced |
 | 0.3.0 | 2026-10-01 | §3.5 approved execution of `REVIEW_REQUIRED` Decisions: same-Decision model; byte-exact binding document for HTTP/MCP/A2A/direct with every forwarded header bound and no session substitution; salted `request_binding` (Spec 07 §11.2 text-field input over the 43-character `binding_sha256`) with vectors; eligibility from signed records only, attestation 1.1 required; expiry checked through the pre-dispatch stage; 5-second validation-to-dispatch limit; one dispatch attempt per Decision with atomic claim and uncertain-commit handling; failure table; direct-caller limits; human approval distinguished from policy continuation; payloads bound as uninterpreted bytes. §3, §4, §5, §6, §8.2, §8.3, §9 updated |
+| 0.3.1 | 2026-10-28 | §3.6: unknown revocation state fails with `REVOCATION_LIST_FAILED` (503), no `valid`/`invalid` result and no record, no dispatch; approved execution fails before the claim; §3.5.9 error list |

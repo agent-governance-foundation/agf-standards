@@ -1,6 +1,6 @@
 # Specification 05: Revocation and Branch Cut Model
 
-**Version:** 0.4.0 (Draft)  
+**Version:** 0.4.1 (Draft)  
 **Status:** Working Draft  
 **Supersedes:** 0.3.0  
 **Layer:** Core format  
@@ -205,6 +205,10 @@ The second row prevents a high-risk action from receiving a plain `ALLOW` while 
 
 **No valid list.** A verifier that has never loaded a valid revocation list, or whose configured source is absent, unreadable or invalid and that holds no previously valid list, MUST REJECT. This is a separate condition from the staleness policy above, which applies only to a previously valid list. An absent, unreadable or empty source MUST NOT be treated as a list with no revocations.
 
+**Rejection.** A decision rejected under this section MUST be a `DENY` with error code `REVOCATION_LIST_FAILED` (Spec 10 §4.3). Neither an approval nor an emergency override MAY reverse it. The PDP MUST NOT return an `ALLOW` or other successful decision outcome when revocation-state rejection applies under this section. The rejection is a failure of a dependency of the PDP, not of the request, so the PDP MUST return it with HTTP status 500; every other `DENY` retains the status it has today.
+
+**Execution time.** Where revocation state is read for execution-time validation (Spec 30), the rejection rule above (the third row of the table, and *No valid list*) applies, but the −20 trust penalty and the `ALLOW_WITH_CAUTION` cap do not: that check produces no decision outcome to adjust. Its failure behaviour is defined in Spec 30 §3.6 and is HTTP status 503, distinct from the decision-time 500.
+
 ### 5.5 Bounded Propagation Guarantees
 
 Revocation propagation MUST meet these latency targets:
@@ -367,3 +371,4 @@ A **stale-list encounter** is one detection of a stale list (§5.4) by a verifie
 | 0.2.0 | 2026-07-14 | Added §4.3.1 normative Invalidation mapping to the AAP-Core kernel `cause` enum (Spec 00, RFC 0001) |
 | 0.3.0 | 2026-07-15 | Added `behavioral_drift` reason (→ kernel `policy_drift`, §4.3.1) and optional `evidence` field on revocation entries (Spec 00 §3.6) |
 | 0.4.0 | 2026-10-28 | §5.4: staleness measured from `valid_until`; inclusive tier boundaries; `max_stale_seconds` bounded to 0–86400; asynchronous, bounded refresh that never delays a decision; the second tier changes only an `ALLOW` outcome; a verifier with no valid list MUST reject. §8.6: a stale-list encounter is counted once per refresh cycle, not per attempt or per decision |
+| 0.4.1 | 2026-10-28 | §5.4: a decision rejected for an unusable revocation list is a final `DENY` with `REVOCATION_LIST_FAILED` returned as HTTP 500; the execution-time check applies the rejection rule without the trust penalty or caution cap (HTTP 503, Spec 30 §3.6) |
