@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://agent-governance-foundation.github.io/agf-standards/schemas/approval-request-record.schema.json",
   "title": "Approval Request Record (signed evidence)",
-  "description": "Spec 07 \u00a711.3 \u2014 signed when a human review request is created. Schema checks structure only; the event-time invariant, bindings and ordering are semantic rules (Spec 07 \u00a711.1, \u00a711.8) enforced by verifiers.",
+  "description": "Spec 07 \u00a711.3 \u2014 signed when a human review request is created. format_version 1.0 is unchanged. format_version 1.1 adds claimed_subject and allows agent_id to be null (no authenticated agent identity, Spec 02 \u00a72.4). Schema checks structure only; the event-time invariant, bindings, ordering and the 1.1 rule that a non-null agent_id equals claimed_subject are semantic rules (Spec 07 \u00a711.1, \u00a711.8) enforced by verifiers.",
   "type": "object",
   "properties": {
     "payload": {
@@ -12,7 +12,10 @@
           "const": "agf.approval_request"
         },
         "format_version": {
-          "const": "1.0"
+          "enum": [
+            "1.0",
+            "1.1"
+          ]
         },
         "record_id": {
           "type": "string",
@@ -39,8 +42,20 @@
           "minLength": 1
         },
         "agent_id": {
-          "type": "string",
-          "minLength": 1
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1,
+          "description": "1.0: the extracted acting principal; carries no authentication claim. 1.1: the authenticated agent identity (Spec 02 \u00a72.4), or null when none is established."
+        },
+        "claimed_subject": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1,
+          "description": "1.1 only. The leaf subject as claimed by the chain, retained as evidence; null only when it cannot be extracted. Semantic rule: when agent_id is non-null it equals claimed_subject."
         },
         "requestor": {
           "type": "string",
@@ -122,7 +137,44 @@
         "timeout_policy",
         "timeout_policy_source"
       ],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "format_version": {
+                "const": "1.0"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "agent_id": {
+                "type": "string"
+              }
+            },
+            "not": {
+              "required": [
+                "claimed_subject"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "format_version": {
+                "const": "1.1"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "claimed_subject"
+            ]
+          }
+        }
+      ]
     },
     "signature": {
       "type": "object",
