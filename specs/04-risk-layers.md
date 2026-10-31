@@ -1,6 +1,6 @@
 # Specification 04: Risk Layers (Inherent, Environmental, Trust)
 
-**Version:** 0.1.1 (Draft)  
+**Version:** 0.2.0 (Draft)  
 **Status:** Working Draft  
 **Supersedes:** 0.1.0  
 **Layer:** Profile  
@@ -91,7 +91,41 @@ trust_score = base(100) - depth_penalty - age_penalty - stale_penalty - unknown_
 trust_score = max(0, min(100, trust_score))
 ```
 
-Revoked ancestor and unknown issuer are hard chain-validity gates checked before `trust_score` is computed (see Spec 02 §3.3, Spec 01 §3.1) — a hit means a hard `DENY`, not a soft point deduction. Stale revocation list does not apply where there is no revocation list with a staleness concept (see Spec 05). A separate, application-layer behavioral reputation penalty (0 to −25, based on the agent's recent decision history) is applied on top of this structural formula.
+Revoked ancestor and unknown issuer are hard chain-validity gates checked before `trust_score` is computed (see Spec 02 §3.3, Spec 01 §3.1) — a hit means a hard `DENY`, not a soft point deduction. Stale revocation list does not apply where there is no revocation list with a staleness concept (see Spec 05). Behavioural reputation is applied on top of this structural formula, as specified in §2.3.1.
+
+#### 2.3.1 Behavioural reputation
+
+The structural `trust_score` above is adjusted by the **requesting organisation's own record** of the acting agent:
+
+```
+adjusted_trust_score = max(0, min(100, trust_score + reputation_adjustment))
+
+reputation_adjustment = 0                                                  if no authenticated agent identity (Spec 02 §2.4)
+                      = 0                                                  if requesting_org has no record for that agent
+                      = record(authenticated_agent, requesting_org).score  otherwise      (0 to −25)
+```
+
+A reputation record is identified by the pair **(authenticated agent identity, observing organisation)**. The record's *role* is derived, never supplied by the caller:
+
+```
+role = owner      if requesting_org is the owner of authenticated_agent (Spec 02 §3.10)
+     = observed   otherwise
+```
+
+The formula is identical for both roles; the **input record** differs:
+
+| Agent owner | Observing organisation | Record used | Role |
+|---|---|---|---|
+| X | X | X's record of the agent | owner reputation |
+| X | Y | Y's record of the agent | observed reputation (Y's) |
+| X | Z | Z's record of the agent | observed reputation (Z's) |
+
+Rules:
+
+1. **Evidence is scoped to the observer.** A record is computed only from evidence recorded within its observing organisation's boundary and attributable to the authenticated agent identity. A decision recorded by Y contributes to Y's record, never to X's, and the converse.
+2. **No implicit sharing, no overwriting.** One organisation's record for an agent MUST NOT be an input to another organisation's record or to another organisation's decisions, and MUST NOT be created, modified or overwritten by another organisation's evidence or recomputation. A mechanism that shares reputation between organisations requires its own specification.
+3. **Unattributed evidence contributes to nothing.** Records whose attribution is `null` (Spec 02 §2.4) are not reputation evidence for any agent.
+4. The range (0 to −25), the evidence window and the decay are implementation-defined and MAY differ between owner and observed records.
 
 ## 3. Risk Combination
 
@@ -253,3 +287,4 @@ Final Risk                 = 85 + 25.55 = 110.55 → capped at 100
 |---------|------|---------|
 | 0.1.0 | 2026-07-12 | Initial public working draft |
 | 0.1.1 | 2026-08-04 | §2.3 risk-formula note: behavioral reputation penalty changed from "MAY be applied" to "is applied," describing actual behavior rather than an optional extension |
+| 0.2.0 | 2026-10-31 | Draft: new §2.3.1 Behavioural reputation. A record is identified by (authenticated agent identity, observing organisation); owner and observed roles are derived from the relationship; evidence is scoped to the observer; no implicit sharing or overwriting across organisations; unattributed evidence contributes nothing. §2.3 no longer describes the penalty as a single global adjustment. |

@@ -1,6 +1,6 @@
 # Specification 07: Audit Trail and Decision Provenance
 
-**Version:** 0.7.0 (Draft)  
+**Version:** 0.8.0 (Draft)  
 **Status:** Working Draft  
 **Supersedes:** 0.5.0  
 **Layer:** Core format  
@@ -90,12 +90,14 @@ What that proof covers — and what it does not — is bounded by Spec 00 §1.1.
 | `schema_version` | Yes | Artifact schema version |
 | `timestamp` | Yes | Decision time |
 | `verifier_id` | Yes | DID of PDP |
-| `agent_id` | Yes | Acting principal (chain leaf subject); `null` when unextractable. Part of the signed evidence payload, so the serialized document must carry it |
+| `agent_id` | Yes | The authenticated agent identity of the acting agent (Spec 02 §2.4); `null` when the leaf subject cannot be extracted or is not an authenticated agent identity. The claimed leaf subject remains in `request.delegation_chain`. Part of the signed evidence payload (a `null` is signed as `null`), so the serialized document must carry it |
 | `request` | Yes | Complete request. Includes the body's `policy_version` when the request named one (Spec 10 §5.5); a version named by a token is in `delegation_chain` |
 | `response` | Yes | Complete response |
 | `policy` | Yes | Policy version, decision, and content hash (`sha256`). When the request named a policy version (a pin, Spec 06 §6.5) and its outcome was determined, additionally carries `requested_version` and `used_version` (the pinned version evaluated, or `null` when the pin was not applied; before 0.6.0 recorded only for a version not found). From 0.6.0 it also carries the evaluation provenance and pin fields of §3.3 |
 | `revocation_state` | Yes | The revocation check the decision actually ran: `method` (`live_db` for a decide-time database check, `static_list` for a versioned list), `checked_at`, `checked_jtis`, and `result` (`passed` or `revoked:<jti>`). Empty when the chain was rejected before the revocation check ran |
 | `signatures` | Yes | Signatures from verifier(s) |
+
+Any other record derived from a decision that names the acting agent follows the same rule: it names the authenticated agent identity or is `null`/absent, and the claimed subject is evidence only.
 
 ### 3.3 Policy Evaluation Provenance
 
@@ -574,7 +576,7 @@ Every `payload` contains these fields, always present:
 | Field | Meaning |
 |---|---|
 | `record_type` | One of the four values above. **A verifier MUST check that `record_type` equals the type it expects before accepting a signature**, so a signature over one record type can never be read as another. Decision and Receipt payloads (§4.3, §10.2) carry no `record_type` member, so no signed evidence record can validate as either. |
-| `format_version` | `"1.0"` for this version, except `agf.approval_attestation`, which is `"1.0"` or `"1.1"` (§11.4). A verifier MUST reject a version it does not implement. |
+| `format_version` | `"1.0"` for this version, except `agf.approval_request` (§11.3) and `agf.approval_attestation` (§11.4), each of which is `"1.0"` or `"1.1"`. A verifier MUST reject a version it does not implement. |
 | `record_id` | Unique id. For `agf.approval_request` it equals `approval_request_id`; for `agf.execution_validation` it is the Execution Validation Record's existing `id` (Spec 30 §4), since Receipts already reference that value (§10.1 `execution_validation_ref`). |
 | `org_id` | The organisation the record belongs to, or `null` where the implementation has none. Records whose binding rules (§11.8) compare `org_id` cannot satisfy them with `null`. |
 | `recorded_at` | Unix seconds at which the PDP recorded and signed the record. |
@@ -587,7 +589,7 @@ Type-specific fields (§11.3–§11.6) are likewise always present, `null` when 
 
 ### 11.2 Canonicalization and Salted Digests
 
-**Canonicalization.** The signing input is the payload serialized under **`AGF-C14N-1.1`** (Spec 25 §2.2), which `format_version` `"1.0"` of every record type in this section, and `"1.1"` of `agf.approval_attestation`, implies. `AGF-C14N-1.1` adds one restriction to `AGF-C14N-1.0` — integers outside ±(2^53 − 1) are rejected — and is otherwise byte-identical. Objects signed under `AGF-C14N-1.0` (Spec 25, Spec 26) are unaffected and continue to verify under 1.0.
+**Canonicalization.** The signing input is the payload serialized under **`AGF-C14N-1.1`** (Spec 25 §2.2), which `format_version` `"1.0"` of every record type in this section, and `"1.1"` of `agf.approval_request` and `agf.approval_attestation`, implies. `AGF-C14N-1.1` adds one restriction to `AGF-C14N-1.0` — integers outside ±(2^53 − 1) are rejected — and is otherwise byte-identical. Objects signed under `AGF-C14N-1.0` (Spec 25, Spec 26) are unaffected and continue to verify under 1.0.
 
 **Salted digests.** Free-text and structured fields that may carry personal data enter a payload only as a salted digest:
 
@@ -606,12 +608,17 @@ Emitted when a review request is created, in the same transaction.
 |---|---|
 | `approval_request_id` | The request's id |
 | `decision_ref` | `artifact_id` of the `REVIEW_REQUIRED` Decision |
-| `agent_id` | The acting agent |
+| `agent_id` | `format_version` `"1.0"`: the extracted acting principal; it carries **no** authentication claim. `"1.1"`: the authenticated agent identity (Spec 02 §2.4), or `null` when none is established |
+| `claimed_subject` | `"1.1"` only, required. The leaf subject as claimed by the chain, retained as evidence; `null` only when it cannot be extracted. The signed delegation chain is reachable through `decision_ref` |
 | `requestor` | The principal whose call triggered the review (a user id, or the organisation id when no user was involved), so that separation of duties is checkable |
 | `role_required` | The role initially required to decide |
 | `created_at` | Event time the request was created |
 | `timeout_policy` | `{timeout_seconds, escalation_chain, final_timeout_action}` — the timeout rule **applied to this request**, where `escalation_chain` is an ordered list of `{role, timeout_seconds}` and `final_timeout_action` is `DENY`, `CONTINUE_WITH_CAUTION`, or `RETRY` |
 | `timeout_policy_source` | `org_config` when the rule came from an explicit organisation setting; `default` when no setting applied (including a failed lookup), in which case `final_timeout_action` is `DENY` |
+
+In `"1.1"`, when `agent_id` is not `null` it MUST equal `claimed_subject`; a record where they differ is malformed (§11.8). A `null` `agent_id` is signed as `null`, so it cannot be replaced by an identity, or omitted, without invalidating the signature. Reputation and escalation processing MUST NOT attribute a request to an agent unless `agent_id` is non-null and the record is `"1.1"`.
+
+**Transition.** Verifiers MUST accept both `"1.0"` and `"1.1"` for `agf.approval_request`; existing `"1.0"` records are never rewritten and keep their meaning. Producers emit `"1.1"` only after the consumers of these records accept it.
 
 The timeout rule may be unversioned configuration rather than a versioned policy (Spec 06). This record signs the values applied and their source at the moment they were chosen; it does not prove the configuration's history.
 
@@ -738,3 +745,4 @@ Salted digests reduce disclosure; they do not anonymize. Identifiers remain link
 | 0.5.0 | 2026-10-01 | Approved execution of `REVIEW_REQUIRED` Decisions (Spec 30 §3.5): `agf.approval_attestation` `format_version` `"1.1"` adds signed `execution_not_after`, frozen at the terminal outcome and required for execution (1.0 still accepted for verifying existing evidence; §11.1, §11.2, §11.4); §11.8 approval rule 6 (`V.checked_at ≤ A.execution_not_after` — validation within the signed window, dispatch time not proven) with `EXECUTION_VALIDATION_AFTER_APPROVAL_EXPIRY`, and a duplicate-execution check `EXECUTED_MORE_THAN_APPROVED` that states its completeness limits and that consumption state is not evidence. Rule 6 and `EXECUTION_VALIDATION_AFTER_APPROVAL_EXPIRY` apply only to execution-eligible outcomes with an integer expiry (never compared with `null`); stated precedence; reference cases `signed-evidence.approval-cases.json` |
 | 0.6.0 | 2026-10-05 | Added §3.3 Policy Evaluation Provenance: additive signed fields in the `policy` block (`evaluator`, `evaluation_status`, `failure_state`, `revision_id`, `module_sha256`, `query_path`, `identity_seen`), labelling rules (a failed attempt is never `evaluated`; a denial before the policy leg is `not_evaluated`, not a placeholder policy `DENY`; a missing requested version is `requested_version_not_found`, never `not_configured`; allowed field combinations; a non-string engine identity is not recorded), pin fields (`pin_status`, `pin_authorization`, `pinned`, `delegation_pin`; `requested_version_not_found` requires `requested_version` and an explicit `used_version: null`) and their allowed combinations (Spec 06 §6.5), the bounded claim (a PDP assertion, not proof of engine execution), and compatibility (earlier artifacts remain valid; absent fields mean provenance not established). Canonical encoding and the evidence payload's field set are unchanged. §6.3.1 `POLICY_VERSION_MISMATCH` redefined for pin outcomes. Amended (2026-10-07, draft): §3.3 `failure_state` values `selection_unavailable` (`evaluator: none`, no revision or query fields) and `not_verified` (revision and hash, no query or identity); `not_evaluated` carries `decision: null`; provenance that cannot be authenticated (including HMAC without the shared secret) is not established; absence cannot distinguish a legacy signer from a non-conformant one. Clarified (2026-10-07, draft): pin fields only once a pin outcome was determined, never an invented status; `request` carries the body's `policy_version`; verifiers infer nothing from absent pin fields. Federation selection (2026-10-08, draft): §3.3 `federation` member: the trust identifier and the federation evaluation's own provenance (`evaluated` or `failed`, never with `not_evaluated`); an unreadable selection or missing revision is `failed` with `selection_unavailable`; absent when the slot is not configured or the decision was denied before the policy leg; decision schema and fixtures |
 | 0.7.0 | 2026-10-16 | RR-0017 (draft): §3.3 `evaluation_status: policy_required` (`evaluator: none`, no engine fields, policy `decision` `DENY`), distinct from `not_configured` and `not_evaluated`; `pin_status: not_applied` (only with `policy_required`), and every other determined pin status allowed with `policy_required`; `federation` never with `policy_required`. A policy outcome of `REVIEW_REQUIRED` (Spec 06 §2.4) is recorded as the policy block's `decision`. Decision schema and fixtures. |
+| 0.8.0 | 2026-10-31 | Draft: §3.1 `agent_id` is the authenticated agent identity of the acting agent or `null`, and records derived from a decision follow the same rule; §11.3 `agf.approval_request` `format_version` `"1.1"` allows a `null` `agent_id` and adds `claimed_subject` (verifiers accept 1.0 and 1.1; producers emit 1.1 only once consumers accept it); §11.2 version and canonicalization rows updated. Cross-reference Spec 02 §2.4 and §3.10, Spec 04 §2.3.1. |

@@ -1,6 +1,6 @@
 # Specification 02: Delegation Chain Semantics
 
-**Version:** 0.4.0 (Draft)  
+**Version:** 0.5.0 (Draft)  
 **Status:** Working Draft  
 **Supersedes:** 0.3.0  
 **Layer:** Core format  
@@ -49,16 +49,30 @@ The first token's issuer is the **root authority** (typically a human or system 
 
 ### 2.4 Acting Agent / Principal Identity
 
-The **acting principal** for a request — the identity used for reputation lookups, audit attribution, HITL routing, and discovery gating — MUST be derived from the **last token in the chain**, not the first:
+The **acting principal** for a request is *extracted* from the **last token in the chain**, not the first:
 
 ```
-acting_principal = chain[-1].sub
+claimed_subject     = chain[-1].sub
 immediate_delegator = chain[-1].iss
 ```
 
-`chain[0].iss` is the **root authority** (§2.1) — typically a human or system administrator — and MUST NOT be used as the acting principal for chains of length > 1. A single-hop chain (`chain[0].iss` is also the immediate delegator) is the only case where root authority and immediate delegator coincide.
+`chain[0].iss` is the **root authority** (§2.1) and MUST NOT be used as the acting principal for chains of length > 1. A single-hop chain (`chain[0].iss` is also the immediate delegator) is the only case where root authority and immediate delegator coincide.
 
-This is a normative rule, not an implementation detail: any subsystem that reads chain identity (reputation scoring, audit logging, HITL escalation, discovery) MUST apply it consistently. Divergent implementations of this rule across subsystems silently misattribute every action in a chain deeper than one hop to the root grantor instead of the real actor.
+Three questions are answered separately and MUST NOT be collapsed into one identifier:
+
+| Question | Answered by | Result |
+|---|---|---|
+| Who claims to be acting? | The token | **Claimed subject.** Untrusted. Evidence only: it remains in the signed `delegation_chain`. |
+| Whose cryptographic authority validates the claim? | Signature verification (§3.4); issuer binding and trust (§3.10) | **Signature-verified subject.** The claimed subject of a chain that validated. It shows that trusted issuers delegated to that identifier. It does not show who is presenting the chain, that the subject is registered, or whom it belongs to. |
+| Which organisation is entitled to recognise that identity? | The identity registry (Spec 08 §3.4) and, across organisations, the peering (Spec 26 §2.1), as applied by "Leaf subject ownership" in §3.10 | **Authenticated agent identity.** A signature-verified subject that satisfies §3.10 "Leaf subject ownership". |
+
+**Persistent attribution** is any persistent record, and any downstream operation, that attributes, retrieves, exports, aggregates or erases data by agent identity. This includes, as examples and not as an exhaustive list: the audit artifact's `agent_id` (Spec 07 §3.1); the Authorization Decision Record's principal; SIEM and webhook exports; analytics and other aggregates; audit erasure by agent; behavioural reputation (Spec 04 §2.3.1); behavioural baselines and drift; HITL routing and escalation records (Spec 07 §11.3); discovery state; and per-agent environmental-signal history such as device sightings. Persistent attribution MUST use an authenticated agent identity only. Where none is established the attribution is `null` or absent. The decision itself is still evaluated and returned.
+
+**Legacy records keep their meaning.** A record created before this rule retains the meaning it had when written. Its agent value is not rewritten and is not reinterpreted as an authenticated identity. An operation that retrieves, exports, aggregates or attributes by agent identity treats such a record as *attribution not established* unless that operation's own specification says otherwise. An operation that only removes data (erasure) MAY match a legacy record on its stored value, because failing to erase is the unsafe direction; that match is never evidence of authentication.
+
+**An unauthenticated subject is still a valid subject.** A leaf subject that is not registered, or whose owner is not recognised for the requesting organisation (§3.10), does not make the chain invalid and does not change the decision. It means only that no authenticated agent identity exists for that request. A signature, a well-formed identifier or a registered issuer key never establishes one.
+
+This is a normative rule, not an implementation detail: every subsystem that reads chain identity (reputation scoring, audit logging, HITL escalation, discovery) MUST apply it consistently.
 
 ## 3. Chain Validity Rules
 
@@ -180,6 +194,26 @@ Any issuer outside the root's permitted set is rejected (`issuer_not_trusted`). 
 - One that cannot be looked up is rejected (`identity_unavailable`).
 - Neither is ever skipped, treated as trusted, or relaxed in any environment. Development and test setups register the identities their fixtures use.
 
+**Leaf subject ownership.** The table above constrains the chain's *issuers*. The leaf subject (`chain[-1].sub`) is not an issuer and is not covered by it. A leaf subject is an **authenticated agent identity** only if all of the following hold:
+
+1. the chain passed validation under §3.4 and the issuer rules above;
+2. the subject is registered in the identity registry (Spec 08 §3.4) and its record is active;
+3. the subject is not the PDP's platform identity;
+4. the subject's owner is the requesting organisation, or the chain's **permitted peer**.
+
+The **permitted peer** is the owner P of the chain's root issuer, and only when P is not the requesting organisation and an **active** peering exists between the requesting organisation and P at the time of the decision. The following never make a subject authenticated, in any combination:
+
+- a peering between the requesting organisation and any organisation other than the owner of this chain's root;
+- a peering between P and any third organisation Q, or any relationship between Q and the requesting organisation;
+- an inactive, suspended, pending or absent peering with P;
+- a subject owned by P in a chain whose root is owned by the requesting organisation (that chain has no permitted peer).
+
+Authentication is decided **per request and per chain**. It is not transitive, it is not carried from one chain or request to another, and it is not cached beyond the request that established it.
+
+Ownership and peering MUST be established from the identity registry and the federation trust state (Spec 26 §2.1) only. They MUST NOT be taken from claims in a token, from the request body, or from any caller-supplied data. If the registry or the peering state cannot be read, no authenticated agent identity is established; ownership is never assumed.
+
+A leaf subject that does not satisfy these conditions does **not** invalidate the chain: a leaf may be a DID that holds no key and is not registered. Decision outcomes are unchanged; only persistent attribution is `null` (§2.4).
+
 **Scope.** These rules apply on **every path** that accepts a chain, or revalidates it, records it as verified, or signs on its basis. That includes:
 - decisions;
 - revalidation of offline decisions;
@@ -300,7 +334,8 @@ def decide(request, current_time):
         return deny("REVOKED")
 
     # 7. Adjust trust score with behavioral reputation (Spec 04)
-    adjusted_trust_score = max(0, chain_result.trust_score + reputation_penalty(acting_principal))
+    adjusted_trust_score = max(0, chain_result.trust_score
+                                  + reputation_penalty(authenticated_agent, requesting_org))   # 0 when none (Spec 04 §2.3.1)
 
     # 8. Evaluate constraints (after trust score — see §3.7 ordering note)
     if not evaluate_constraints(request.chain, request.context).passed:
@@ -351,3 +386,4 @@ Implementations MUST monitor validation time and alert if approaching limits. Co
 | 0.2.0 | 2026-07-15 | Added §3.9: duplicate `jti` within a submitted chain is rejected with `INVALID_REQUEST` (CHAIN-11, KERNEL-NEG-02) |
 | 0.3.0 | 2026-08-09 | §3.6/§6: corrected max_depth binding-limit pseudocode for chains with a mix of explicit and omitted `max_depth` claims — `min(max_depth_i)` ranges only over tokens that explicitly carry the claim; an omitting token never implicitly contributes `DEFAULT_MAX_DEPTH`. No change to the normative formula itself, and no effect on chains where every token supplies an explicit claim. |
 | 0.4.0 | 2026-10-08 | Draft: §3.4 the key that actually verified each token must be a registered key of its issuer, checked per token against its own verifying key (`issuer_key_unbound`). Added §3.10 Issuer Trust for the Requesting Organisation: permitted issuers by root (requester-owned; platform root whose subject the requester owns; a root owned by an actively peered organisation), one peer per chain, `issuer_not_trusted`, `identity_not_found` and `identity_unavailable` in every environment; applies to decisions, offline revalidation, Trust Summary issuance and proof retrieval. §6 chain validation reads the identity registry and peering, and is no longer described as pure |
+| 0.5.0 | 2026-10-31 | Draft: §2.4 distinguishes the claimed subject, the signature-verified subject and the authenticated agent identity, limits persistent attribution to the last, and states that legacy records keep their meaning; §3.10 adds leaf subject ownership and defines the permitted peer exactly (per request, non-transitive, only the owner of the chain's root under an active peering). An unregistered leaf remains a valid subject and does not change the decision. The reputation lookup in the orchestration pseudo-code uses the authenticated agent identity and the requesting organisation. |

@@ -1,6 +1,6 @@
 # Specification 00: AAP-Core — Normative Kernel
 
-**Version:** 0.4.0 (Draft)  
+**Version:** 0.4.1 (Draft)  
 **Status:** Working Draft  
 **Supersedes:** 0.3.2  
 **Layer:** Kernel  
@@ -57,7 +57,7 @@ The entity that acts: a human, a service, or an agent instance.
 | `actor_type` | Yes | `human`, `service`, or `agent` |
 | `keys` | Conditional | One or more verification methods. REQUIRED for any actor that signs kernel objects (issues Authority, signs Decisions or Receipts); OPTIONAL for actors that act only through an authenticated intermediary |
 
-**AGF serialization:** DIDs and DID documents per Spec 08 (`did:agf:{namespace}:{id}`); `agent_id` in the decision artifact identifies the acting principal (chain leaf subject).
+**AGF serialization:** DIDs and DID documents per Spec 08 (`did:agf:{namespace}:{id}`); `agent_id` in the decision artifact is the authenticated agent identity of the acting agent (Spec 02 §2.4), or is `null` when none is established.
 
 ### 3.2 Authority
 
@@ -231,3 +231,4 @@ Receipt `outcome: unknown` is honest but weak: a system in which most Receipts a
 | 0.3.1 | 2026-09-30 | §3.6: revocations are additionally serialized as signed Invalidation records (Spec 07 §11.5) |
 | 0.3.2 | 2026-10-01 | KERNEL-NEG-02 and §7.1: approved execution of a `REVIEW_REQUIRED` Decision (Spec 30 §3.5) stated as the sole, bounded exception to re-presented-request handling; no new kernel object or state. §4 `REVIEW_REQUIRED`: a human judgment, or an organisation-configured timeout continuation (Spec 15 §5), stated as policy continuation and not human approval; the NEG-02 exception requires every Spec 30 §3.5 control and keeps a stored `ALLOW` unusable as bearer authority |
 | 0.4.0 | 2026-10-05 | KERNEL-NEG-03 and §3.2 `policy_ref`: a requested policy version never disables or replaces the organisation's policy (Spec 06 §6.5). An unavailable or unauthorized request is `DENY` where an organisation policy applies, and an unauthorized or conflicting request is always `DENY`. The surfaced, `caution`-qualified outcome remains only for an authorized request with no organisation policy |
+| 0.4.1 | 2026-10-31 | §3 serialization note: `agent_id` in the decision artifact is the authenticated agent identity of the acting agent, or `null` when none is established (Spec 02 §2.4, §3.10). |
